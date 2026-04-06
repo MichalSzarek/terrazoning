@@ -1,0 +1,88 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ── MapLibre GL overrides ─────────────────────────────────────────────── */
+
+/* Make MapLibre attribution blend with dark theme */
+.maplibregl-ctrl-attrib {
+  background: rgba(13, 17, 23, 0.75) !important;
+  color: #6b7280 !important;
+  font-size: 10px !important;
+}
+
+.maplibregl-ctrl-attrib a {
+  color: #9ca3af !important;
+}
+
+/* Navigation control — dark themed */
+.maplibregl-ctrl-group {
+  background: #161b22 !important;
+  border: 1px solid #30363d !important;
+  border-radius: 6px !important;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.4) !important;
+}
+
+.maplibregl-ctrl-group button {
+  background: transparent !important;
+  color: #9ca3af !important;
+  border-bottom: 1px solid #21262d !important;
+}
+
+.maplibregl-ctrl-group button:hover {
+  background: #21262d !important;
+  color: #f3f4f6 !important;
+}
+
+.maplibregl-ctrl-group button:last-child {
+  border-bottom: none !important;
+}
+
+/* Scale bar */
+.maplibregl-ctrl-scale {
+  background: rgba(13, 17, 23, 0.75) !important;
+  border-color: #4b5563 !important;
+  color: #9ca3af !important;
+  font-size: 10px !important;
+}
+
+/* Popup override — we render our own styled div inside */
+.maplibregl-popup-content {
+  background: transparent !important;
+  padding: 0 !important;
+  border-radius: 8px !important;
+  box-shadow: none !important;
+}
+
+.maplibregl-popup-tip {
+  display: none !important;
+}
+
+/* ── Scrollbar styling (webkit) ──────────────────────────────────────── */
+::-webkit-scrollbar {
+  width: 4px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #374151;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #4b5563;
+}
+
+/* ── Base reset ──────────────────────────────────────────────────────── */
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+html, body, #root {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+}
