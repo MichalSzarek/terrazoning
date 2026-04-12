@@ -1,4 +1,6 @@
-from pydantic import Field, PostgresDsn, computed_field, field_validator
+from sqlalchemy.engine import URL, make_url
+
+from pydantic import Field, computed_field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -42,29 +44,42 @@ class Settings(BaseSettings):
     # Individual components allow docker-compose and GCP Cloud SQL to provide
     # host/port/user/pass separately without constructing a URL externally.
     # -------------------------------------------------------------------------
+    database_url_override: str | None = Field(default=None, alias="DATABASE_URL")
     db_host: str = Field(default="localhost")
     db_port: int = Field(default=5432)
     db_name: str = Field(default="terrazoning")
     db_user: str = Field(default="terrazoning")
     db_password: str = Field(default="terrazoning")
 
+    def _database_url_for_driver(self, driver: str) -> str:
+        if self.database_url_override:
+            parsed = make_url(self.database_url_override)
+            base_driver = parsed.drivername.split("+", 1)[0]
+            normalized_base = "postgresql" if base_driver == "postgres" else base_driver
+            return parsed.set(
+                drivername=f"{normalized_base}+{driver}"
+            ).render_as_string(hide_password=False)
+
+        return URL.create(
+            drivername=f"postgresql+{driver}",
+            username=self.db_user,
+            password=self.db_password,
+            host=self.db_host,
+            port=self.db_port,
+            database=self.db_name,
+        ).render_as_string(hide_password=False)
+
     # Async driver for SQLAlchemy (asyncpg)
     @computed_field
     @property
     def database_url(self) -> str:
-        return (
-            f"postgresql+asyncpg://{self.db_user}:{self.db_password}"
-            f"@{self.db_host}:{self.db_port}/{self.db_name}"
-        )
+        return self._database_url_for_driver("asyncpg")
 
     # Sync driver for Alembic offline migrations (psycopg2)
     @computed_field
     @property
     def database_url_sync(self) -> str:
-        return (
-            f"postgresql+psycopg2://{self.db_user}:{self.db_password}"
-            f"@{self.db_host}:{self.db_port}/{self.db_name}"
-        )
+        return self._database_url_for_driver("psycopg2")
 
     # -------------------------------------------------------------------------
     # Connection pool tuning

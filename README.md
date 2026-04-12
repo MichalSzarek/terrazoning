@@ -101,6 +101,32 @@ curl http://localhost:8000/api/v1/health
 
 Dokumentacja API (Swagger UI): **http://localhost:8000/docs**
 
+### Backend przeciwko Cloud SQL (`maths`)
+
+Jeśli chcesz uruchomić TerraZoning bez lokalnego Postgresa, backend obsługuje teraz
+`DATABASE_URL` i ma gotowy workflow pod Cloud SQL Auth Proxy:
+
+```bash
+# Wymaga: gcloud auth application-default login
+# oraz lokalnego repo maths-iac z aktualnym state dev/data
+make cloudsql-health
+make backend-cloudsql
+```
+
+Ten tryb:
+- pobiera parametry instancji z `maths-iac/environments/dev/data`
+- uruchamia `cloud-sql-proxy` na `127.0.0.1:6543`
+- ustawia `DATABASE_URL=postgresql://admin:...@127.0.0.1:6543/terrazoning`
+- startuje backend już przeciwko Cloud SQL
+
+Jeśli chcesz własny URL, możesz też ustawić go ręcznie:
+
+```bash
+cd backend
+DATABASE_URL=postgresql://admin:secret@127.0.0.1:6543/terrazoning \
+  uv run uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+```
+
 ---
 
 ### Krok 3 — Scraper (live, licytacje.komornik.pl)
