@@ -9,6 +9,8 @@ BACKLOG_FORMAT ?= csv
 BACKLOG_OUTPUT ?=
 EXPECTED_STATE ?= enabled
 SMOKE_LIMIT ?= 1
+APP_HOST ?= 0.0.0.0
+APP_PORT ?= 8000
 
 .PHONY: help sync-all sync-backend sync-scraper sync-frontend scrape-dry scrape-live mpzp-sync mpzp-one \
 	mpzp-uncovered mpzp-registry mpzp-ruda reparse-bronze geo-resolve delta planning-signal-sync \
@@ -32,6 +34,9 @@ help:
 	@echo "  make sync-slaskie      - sync configured MPZP sources only for Śląskie"
 	@echo "  make sync-malopolskie  - sync configured MPZP sources only for Małopolskie"
 	@echo "  make mpzp-ruda         - sync only Ruda Slaska via WMS grid ingest"
+	@echo "  make backend-dev       - run backend against local docker-compose PostGIS"
+	@echo "  make backend-cloudsql  - run backend against Cloud SQL via auth proxy"
+	@echo "  make cloudsql-health   - smoke-check Cloud SQL connection for backend"
 	@echo "  make reparse-bronze    - rerun Bronze extraction on saved listings"
 	@echo "  make geo-resolve       - run GeoResolver"
 	@echo "  make delta             - run DeltaEngine"
@@ -63,6 +68,15 @@ sync-scraper:
 
 sync-frontend:
 	cd frontend && npm install
+
+backend-dev:
+	cd backend && uv run uvicorn app.main:app --reload --host $(APP_HOST) --port $(APP_PORT)
+
+backend-cloudsql:
+	APP_HOST=$(APP_HOST) APP_PORT=$(APP_PORT) ./scripts/run_backend_cloudsql.sh serve
+
+cloudsql-health:
+	./scripts/run_backend_cloudsql.sh health
 
 scrape-dry:
 	cd scraper && uv run python run_live.py --dry-run --provinces $(PROVINCES) --max-pages 1 --verbose
