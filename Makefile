@@ -9,18 +9,26 @@ BACKLOG_FORMAT ?= csv
 BACKLOG_OUTPUT ?=
 EXPECTED_STATE ?= enabled
 SMOKE_LIMIT ?= 1
-APP_HOST ?= 0.0.0.0
-APP_PORT ?= 8000
+BACKEND_HOST ?= 0.0.0.0
+BACKEND_PORT ?= 8000
+FRONTEND_HOST ?= 0.0.0.0
+FRONTEND_PORT ?= 5173
+APP_HOST ?= $(BACKEND_HOST)
+APP_PORT ?= $(BACKEND_PORT)
 
 .PHONY: help sync-all sync-backend sync-scraper sync-frontend scrape-dry scrape-live mpzp-sync mpzp-one \
 	mpzp-uncovered mpzp-registry mpzp-ruda reparse-bronze geo-resolve delta planning-signal-sync \
 	future-buildability future-buildability-status future-buildability-backlog future-buildability-smoke force-retry load-all-data \
 	refresh-all gliwice-cluster status doctor sync-slaskie sync-malopolskie report-slaskie \
-	report-malopolskie delta-gap-malopolskie campaign-slaskie campaign-malopolskie campaign-all
+	report-malopolskie delta-gap-malopolskie campaign-slaskie campaign-malopolskie campaign-all \
+	run run-backend run-frontend backend-dev backend-cloudsql cloudsql-health
 
 help:
 	@echo "TerraZoning data operations"
 	@echo ""
+	@echo "  make run               - run backend + frontend (dev) in parallel"
+	@echo "  make run-backend       - run FastAPI backend (BACKEND_PORT=8000)"
+	@echo "  make run-frontend      - run Vite frontend (FRONTEND_PORT=5173)"
 	@echo "  make sync-all          - install/update backend, scraper, and frontend deps"
 	@echo "  make sync-backend      - install/update backend deps"
 	@echo "  make sync-scraper      - install/update scraper deps"
@@ -78,6 +86,14 @@ backend-cloudsql:
 cloudsql-health:
 	./scripts/run_backend_cloudsql.sh health
 
+run-backend:
+	cd backend && uv run uvicorn app.main:app --reload --host $(BACKEND_HOST) --port $(BACKEND_PORT)
+
+run-frontend:
+	cd frontend && npm run dev -- --host $(FRONTEND_HOST) --port $(FRONTEND_PORT)
+
+run:
+	$(MAKE) -j2 run-backend run-frontend
 scrape-dry:
 	cd scraper && uv run python run_live.py --dry-run --provinces $(PROVINCES) --max-pages 1 --verbose
 
