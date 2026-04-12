@@ -72,6 +72,7 @@ CREATE TABLE bronze.raw_listings (
     raw_powiat          TEXT,
     raw_wojewodztwo     TEXT,
     raw_kw              TEXT,                       -- nr Księgi Wieczystej (jeśli znaleziony)
+    sygnatura_akt       TEXT,                       -- np. 'Km 123/25' dla druga licytacja detection
 
     -- Evidence Chain
     raw_html_ref    TEXT,                           -- ścieżka do bronze.raw_documents lub GCS URI
@@ -85,6 +86,7 @@ CREATE TABLE bronze.raw_listings (
 
 CREATE UNIQUE INDEX idx_raw_listings_dedup ON bronze.raw_listings (dedup_hash);
 CREATE INDEX idx_raw_listings_source_type ON bronze.raw_listings (source_type, created_at DESC);
+CREATE INDEX idx_raw_listings_sygn_kw ON bronze.raw_listings (sygnatura_akt, raw_kw);
 CREATE INDEX idx_raw_listings_unprocessed ON bronze.raw_listings (is_processed) WHERE NOT is_processed;
 CREATE INDEX idx_raw_listings_scrape_run ON bronze.raw_listings (scrape_run_id);
 ```
@@ -193,8 +195,8 @@ CREATE TABLE silver.listing_parcels (
     -- Jak pewni jesteśmy tego powiązania?
     match_confidence NUMERIC(3,2) NOT NULL DEFAULT 0.00
                      CHECK (match_confidence >= 0.00 AND match_confidence <= 1.00),
-    match_method     TEXT NOT NULL                  -- 'teryt_exact' | 'kw_lookup' | 'address_fuzzy' | 'manual'
-                     CHECK (match_method IN ('teryt_exact', 'kw_lookup', 'address_fuzzy', 'manual')),
+    match_method     TEXT NOT NULL                  -- 'teryt_exact' | 'kw_lookup' | 'address_fuzzy' | 'uldk_partial' | 'manual'
+                     CHECK (match_method IN ('teryt_exact', 'kw_lookup', 'address_fuzzy', 'uldk_partial', 'manual')),
 
     created_at       TIMESTAMPTZ NOT NULL DEFAULT now()
 );
@@ -233,13 +235,20 @@ CREATE TABLE gold.planning_zones (
     area_m2             NUMERIC(14,2)
                         GENERATED ALWAYS AS (ST_Area(geom)) STORED,
 
+    -- Klucz deduplicacji przestrzennej: "{round(cx)}_{round(cy)}" centroidu w EPSG:2180.
+    -- Wiele stref tego samego typu (np. dziesiątki MN) może współistnieć w bazie.
+    geom_hash           TEXT NOT NULL,
+
     -- Metadata źródła
     source_wfs_url      TEXT,                       -- WFS/GML z którego pobrano
     ingested_at         TIMESTAMPTZ NOT NULL DEFAULT now(),
     plan_effective_date DATE,                       -- data wejścia w życie planu
 
     created_at          TIMESTAMPTZ NOT NULL DEFAULT now(),
-    updated_at          TIMESTAMPTZ NOT NULL DEFAULT now()
+    updated_at          TIMESTAMPTZ NOT NULL DEFAULT now(),
+
+    CONSTRAINT uq_planning_zones_spatial_key
+        UNIQUE (source_wfs_url, teryt_gmina, przeznaczenie, geom_hash)
 );
 
 CREATE INDEX idx_planning_zones_geom ON gold.planning_zones USING GIST (geom);

@@ -16,7 +16,8 @@ Architecture Commandments enforced:
 
 Lead generation logic:
   - A działka qualifies for an investment_leads row when:
-      coverage_pct > 30% AND przeznaczenie ∈ _BUILDABLE_PRZEZNACZENIA
+      (coverage_pct > 30% OR intersection_area_m2 > 500 m²)
+      AND przeznaczenie ∈ _BUILDABLE_PRZEZNACZENIA
   - confidence_score = match_confidence × delta_score (clamped to 1.00)
   - priority:  ≥ 0.90 → 'high'  |  ≥ 0.75 → 'medium'  |  else → 'low'
 
@@ -33,6 +34,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import re
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from decimal import Decimal
@@ -43,6 +45,7 @@ from sqlalchemy import select, text
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.models.bronze import RawListing
 from app.models.gold import DeltaResult, InvestmentLead
 from app.models.silver import Dzialka, ListingParcel
 
@@ -51,6 +54,36 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 # Buildable land use categories (przeznaczenie → investment potential)
 # ---------------------------------------------------------------------------
+
+# EGiB land use codes that indicate NON-BUILT, agricultural or waste land.
+# A genuine arbitrage opportunity exists when:
+#   current_use ∈ _AGRICULTURAL_EGIB_CODES  AND  new zone ∈ _BUILDABLE_PRZEZNACZENIA
+#
+# If current_use = 'B' (already built), the market has already priced in the
+# building potential — there is no delta to capture. False positive avoided.
+#
+# Source: Rozporządzenie w sprawie ewidencji gruntów i budynków (GUGiK classification)
+_AGRICULTURAL_EGIB_CODES: frozenset[str] = frozenset({
+    "R",    # grunty orne (arable)
+    "Ł",    # łąki trwałe (permanent meadows)
+    "Ps",   # pastwiska trwałe (permanent pastures)
+    "Ls",   # lasy (forest)
+    "Lz",   # grunty zadrzewione i zakrzewione (scrubland)
+    "S",    # sady (orchards)
+    "N",    # nieużytki (wastelands — often rezoned)
+    "W",    # grunty pod wodami (surface water — less common)
+    "dr",   # drogi (roads — rezoning possible on surplus road land)
+})
+
+# ALREADY BUILT codes — no arbitrage potential, market price reflects existing use.
+# Leads for parcels with these EGiB codes are suppressed.
+_BUILT_EGIB_CODES: frozenset[str] = frozenset({
+    "B",    # tereny mieszkaniowe zabudowane (built residential)
+    "Ba",   # tereny przemysłowe (industrial)
+    "Bi",   # inne tereny zabudowane (other built)
+    "Bp",   # zurbanizowane niezabudowane (urban undeveloped — BORDERLINE, keep for review)
+    "K",    # użytki kopalne (mining)
+})
 
 # These symbols indicate that a zone has building/development potential.
 # Source: Polish planning law (ustawa o planowaniu i zagospodarowaniu przestrzennym)
@@ -70,10 +103,13 @@ _BUILDABLE_PRZEZNACZENIA: frozenset[str] = frozenset({
     "MN/U",     # mieszkaniowo-usługowe
     "U/MN",     # usługowo-mieszkaniowe
     "MNU",      # mieszkaniowo-usługowe (alternative notation)
+    "U/MW",     # usługowo-wielorodzinne
+    "MW/U",     # wielorodzinnie-usługowe
 })
 
-# Minimum coverage threshold to qualify for investment_leads
+# Minimum spatial thresholds to qualify for investment_leads
 _LEAD_COVERAGE_THRESHOLD_PCT = Decimal("30.00")
+_LEAD_MIN_BUILDABLE_AREA_M2 = Decimal("500.00")
 
 # Delta score by coverage percentage
 _DELTA_SCORE_TIERS: list[tuple[Decimal, Decimal]] = [
@@ -85,6 +121,11 @@ _DELTA_SCORE_DEFAULT = Decimal("0.50")     # below threshold (non-lead zones)
 
 # Sliver threshold — intersections smaller than this are noise
 _SLIVER_THRESHOLD_M2 = 0.5
+
+_LETTER_HYPHEN_PATTERN = re.compile(r"(?<=[A-ZĄĆĘŁŃÓŚŹŻ])-(?=[A-ZĄĆĘŁŃÓŚŹŻ])")
+_LEADING_NOISE_PATTERN = re.compile(r"^[0-9._-]+")
+_TRAILING_NOISE_PATTERN = re.compile(r"[._-]*[0-9]+$")
+_EDGE_SEPARATOR_PATTERN = re.compile(r"^[._-]+|[._-]+$")
 
 
 # ---------------------------------------------------------------------------
@@ -105,7 +146,8 @@ _SPATIAL_JOIN_SQL = text(
     WITH
     -- Identify działki to analyse
     target_dzialki AS (
-        SELECT d.id, d.identyfikator, d.match_confidence, d.area_m2, d.teryt_gmina
+        SELECT d.id, d.identyfikator, d.match_confidence, d.area_m2, d.teryt_gmina,
+               d.current_use
         FROM silver.dzialki d
         WHERE d.resolution_status = 'resolved'
           AND d.area_m2 > 0
@@ -122,13 +164,17 @@ _SPATIAL_JOIN_SQL = text(
             td.match_confidence,
             td.area_m2                                             AS dzialka_area_m2,
             td.teryt_gmina,
+            td.current_use,
             pz.id                                                   AS planning_zone_id,
             pz.przeznaczenie,
             pz.plan_type,
             pz.plan_name,
-            ST_Area(ST_Intersection(td.geom, pz.geom))             AS intersection_area_m2,
+            ST_Area(ST_Intersection(d.geom, pz.geom))              AS intersection_area_m2,
             ST_Multi(
-                ST_MakeValid(ST_Intersection(td.geom, pz.geom))
+                ST_CollectionExtract(
+                    ST_MakeValid(ST_Intersection(d.geom, pz.geom)),
+                    3
+                )
             )                                                       AS intersection_geom
         FROM target_dzialki td
         JOIN silver.dzialki d ON d.id = td.id
@@ -140,12 +186,13 @@ _SPATIAL_JOIN_SQL = text(
         match_confidence,
         dzialka_area_m2,
         teryt_gmina,
+        current_use,
         planning_zone_id,
         przeznaczenie,
         plan_type,
         plan_name,
         ROUND(
-            intersection_area_m2 / dzialka_area_m2 * 100.0,
+            (intersection_area_m2 / dzialka_area_m2 * 100.0)::numeric,
             2
         )                                                          AS coverage_pct,
         intersection_area_m2,
@@ -176,6 +223,39 @@ _UNANALYZED_DZIALKI_SQL = text(
 # Data structures
 # ---------------------------------------------------------------------------
 
+def normalize_symbol(symbol: str | None) -> str:
+    """Normalize local MPZP typology variants to a stable buildable symbol.
+
+    Examples:
+      - 19.MN   -> MN
+      - U/MN-3  -> U/MN
+      - MN.1    -> MN
+      - 1MNU    -> MNU
+    """
+    if symbol is None:
+        return ""
+
+    value = re.sub(r"\s+", "", symbol.strip().upper())
+    if not value:
+        return ""
+
+    # Some municipalities use letter-to-letter hyphens for mixed zones.
+    value = _LETTER_HYPHEN_PATTERN.sub("/", value)
+
+    normalized_parts: list[str] = []
+    for raw_part in value.split("/"):
+        part = _LEADING_NOISE_PATTERN.sub("", raw_part)
+        part = _TRAILING_NOISE_PATTERN.sub("", part)
+        part = _EDGE_SEPARATOR_PATTERN.sub("", part)
+        if part:
+            normalized_parts.append(part)
+    return "/".join(normalized_parts)
+
+
+def is_buildable_symbol(symbol: str | None) -> bool:
+    """Return True when the normalized symbol maps to a buildable typology."""
+    return normalize_symbol(symbol) in _BUILDABLE_PRZEZNACZENIA
+
 @dataclass
 class DeltaRow:
     """One spatial intersection result: działka × planning_zone."""
@@ -184,6 +264,7 @@ class DeltaRow:
     match_confidence: Decimal
     dzialka_area_m2: Decimal
     teryt_gmina: str
+    current_use: str | None     # EGiB code from silver.dzialki — None if not yet fetched
     planning_zone_id: UUID
     przeznaczenie: str
     plan_type: str
@@ -194,11 +275,35 @@ class DeltaRow:
 
     @property
     def is_buildable(self) -> bool:
-        return self.przeznaczenie in _BUILDABLE_PRZEZNACZENIA
+        return is_buildable_symbol(self.przeznaczenie)
+
+    @property
+    def is_genuine_delta(self) -> bool:
+        """True only when current EGiB use is agricultural/waste AND zone is buildable.
+
+        This is the core fix for the Fake Delta Trap:
+        - current_use=None → unknown, allow through (don't suppress, but warn)
+        - current_use='B'  → already built, market priced it → suppress lead
+        - current_use='R'  → arable land rezoned to 'MN' → GENUINE ARBITRAGE
+        """
+        if not self.is_buildable:
+            return False
+        normalized = (self.current_use or "").strip()
+        if not normalized or normalized.upper() == "R_UNKNOWN":
+            # EGiB data not yet loaded — allow through but mark for review
+            return True
+        if normalized in _BUILT_EGIB_CODES:
+            return False   # already built, no price delta to capture
+        return normalized in _AGRICULTURAL_EGIB_CODES
 
     @property
     def qualifies_for_lead(self) -> bool:
-        return self.is_buildable and self.coverage_pct >= _LEAD_COVERAGE_THRESHOLD_PCT
+        if not self.is_genuine_delta:
+            return False
+        return (
+            self.coverage_pct >= _LEAD_COVERAGE_THRESHOLD_PCT
+            or self.intersection_area_m2 >= _LEAD_MIN_BUILDABLE_AREA_M2
+        )
 
 
 @dataclass
@@ -280,6 +385,12 @@ class DeltaEngine:
         report.leads_created, report.leads_updated = await self._generate_leads(
             delta_rows, dzialka_ids=set(target_ids)
         )
+        backfilled_prices = await self._backfill_missing_price_per_m2()
+        if backfilled_prices:
+            logger.info(
+                "[DeltaEngine] Backfilled price_per_m2_zl for %d existing lead(s)",
+                backfilled_prices,
+            )
 
         report.dzialki_analyzed = len(target_ids)
         report.duration_s = round(asyncio.get_event_loop().time() - t_start, 2)
@@ -325,12 +436,20 @@ class DeltaEngine:
 
         rows: list[DeltaRow] = []
         for row in result.mappings():
+            current_use = row["current_use"]
+            if not (current_use or "").strip():
+                logger.warning(
+                    "[DeltaEngine] dzialka %s has missing current_use — "
+                    "treating as unknown/agricultural for lead generation",
+                    row["dzialka_id"],
+                )
             rows.append(DeltaRow(
                 dzialka_id=row["dzialka_id"],
                 identyfikator=row["identyfikator"],
                 match_confidence=Decimal(str(row["match_confidence"])),
                 dzialka_area_m2=Decimal(str(row["dzialka_area_m2"])),
                 teryt_gmina=row["teryt_gmina"],
+                current_use=current_use,
                 planning_zone_id=row["planning_zone_id"],
                 przeznaczenie=row["przeznaczenie"],
                 plan_type=row["plan_type"],
@@ -363,7 +482,9 @@ class DeltaEngine:
 
         for row in rows:
             delta_score = _compute_delta_score(row.coverage_pct)
-            is_upgrade = row.is_buildable
+            # is_upgrade reflects genuine land-use arbitrage (agricultural → buildable),
+            # not just any buildable zone — prevents Fake Delta Trap (Red Flag 1).
+            is_upgrade = row.is_genuine_delta
 
             stmt = (
                 pg_insert(DeltaResult)
@@ -373,6 +494,7 @@ class DeltaEngine:
                     intersection_geom=row.intersection_geom,
                     intersection_area_m2=float(row.intersection_area_m2),
                     coverage_pct=float(row.coverage_pct),
+                    przeznaczenie_before=row.current_use,    # EGiB code (may be NULL)
                     przeznaczenie_after=row.przeznaczenie,
                     is_upgrade=is_upgrade,
                     delta_score=float(delta_score),
@@ -406,7 +528,7 @@ class DeltaEngine:
 
         A działka qualifies when at least one of its delta rows has:
           - przeznaczenie ∈ _BUILDABLE_PRZEZNACZENIA
-          - coverage_pct ≥ 30%
+          - coverage_pct ≥ 30% OR intersection_area_m2 ≥ 500 m²
 
         For each qualifying działka, we:
           1. Select the highest-coverage buildable zone as the dominant przeznaczenie
@@ -431,17 +553,27 @@ class DeltaEngine:
             confidence = min(best.match_confidence * delta_score, Decimal("1.00"))
             priority = _priority_for_score(confidence)
 
-            # Max coverage among all buildable zones for this dzialka
+            # Max coverage among all qualifying buildable zones for this dzialka
             max_coverage = max(r.coverage_pct for r in q_rows)
+            max_buildable_area = max(r.intersection_area_m2 for r in q_rows)
 
-            # Fetch listing_id via silver.listing_parcels (most recent match)
-            listing_id = await self._fetch_listing_id(dzialka_id)
+            # Fetch listing linkage + price context via silver.listing_parcels.
+            listing_id, listing_price_zl = await self._fetch_listing_context(dzialka_id)
+            price_per_m2_zl: Decimal | None = None
+            if (
+                listing_price_zl is not None
+                and best.dzialka_area_m2 > 0
+            ):
+                price_per_m2_zl = (
+                    listing_price_zl / best.dzialka_area_m2
+                ).quantize(Decimal("0.01"))
 
             # Build evidence chain step
             evidence_entry: dict[str, Any] = {
                 "step": "delta",
                 "ref": str(best.planning_zone_id),
                 "coverage": float(best.coverage_pct),
+                "intersection_area_m2": float(best.intersection_area_m2),
                 "przeznaczenie": best.przeznaczenie,
                 "plan": best.plan_name,
                 "plan_type": best.plan_type,
@@ -455,6 +587,7 @@ class DeltaEngine:
                 priority=priority,
                 max_coverage_pct=max_coverage,
                 dominant_przeznaczenie=best.przeznaczenie,
+                price_per_m2_zl=price_per_m2_zl,
                 evidence_entry=evidence_entry,
             )
             if was_updated:
@@ -479,6 +612,7 @@ class DeltaEngine:
         priority: str,
         max_coverage_pct: Decimal,
         dominant_przeznaczenie: str,
+        price_per_m2_zl: Decimal | None,
         evidence_entry: dict[str, Any],
     ) -> bool:
         """Insert or update an investment_leads row. Returns True if update, False if insert."""
@@ -486,27 +620,44 @@ class DeltaEngine:
 
         # Check if a lead already exists
         existing_q = await self.db.execute(
-            select(InvestmentLead).where(InvestmentLead.dzialka_id == dzialka_id)
+            select(InvestmentLead).where(
+                InvestmentLead.dzialka_id == dzialka_id,
+                text("COALESCE(strategy_type, 'current_buildable') = 'current_buildable'"),
+            )
         )
         existing = existing_q.scalar_one_or_none()
 
         if existing is not None:
             # Update only if new confidence is higher
+            should_update = False
             if confidence_score > existing.confidence_score:
                 existing.confidence_score = confidence_score
                 existing.priority = priority
                 existing.max_coverage_pct = max_coverage_pct
                 existing.dominant_przeznaczenie = dominant_przeznaczenie
+                existing.price_per_m2_zl = price_per_m2_zl
                 existing.updated_at = datetime.now(timezone.utc)
                 # Append new delta evidence to chain
                 chain = list(existing.evidence_chain or [])
                 chain.append(evidence_entry)
                 existing.evidence_chain = chain
+                should_update = True
                 logger.debug(
                     "[DeltaEngine] Updated lead dzialka=%s score=%.2f priority=%s",
                     dzialka_id, confidence_score, priority,
                 )
-            else:
+            elif (
+                price_per_m2_zl is not None
+                and existing.price_per_m2_zl != price_per_m2_zl
+            ):
+                existing.price_per_m2_zl = price_per_m2_zl
+                existing.updated_at = datetime.now(timezone.utc)
+                should_update = True
+                logger.debug(
+                    "[DeltaEngine] Refreshed lead price dzialka=%s price_per_m2=%s",
+                    dzialka_id, price_per_m2_zl,
+                )
+            if not should_update:
                 logger.debug(
                     "[DeltaEngine] Skipped lead update dzialka=%s (existing score=%.2f ≥ new=%.2f)",
                     dzialka_id, existing.confidence_score, confidence_score,
@@ -530,6 +681,7 @@ class DeltaEngine:
             priority=priority,
             max_coverage_pct=max_coverage_pct,
             dominant_przeznaczenie=dominant_przeznaczenie,
+            price_per_m2_zl=price_per_m2_zl,
             evidence_chain=[parcel_step, evidence_entry],
             status="new",
         )
@@ -565,16 +717,49 @@ class DeltaEngine:
             len(dzialka_ids),
         )
 
-    async def _fetch_listing_id(self, dzialka_id: UUID) -> Optional[UUID]:
-        """Find the most recent listing linked to this dzialka via silver.listing_parcels."""
+    async def _fetch_listing_context(
+        self,
+        dzialka_id: UUID,
+    ) -> tuple[Optional[UUID], Decimal | None]:
+        """Find the most recent listing linked to this dzialka plus auction price."""
         result = await self.db.execute(
-            select(ListingParcel.listing_id)
+            select(ListingParcel.listing_id, RawListing.price_zl)
+            .join(RawListing, RawListing.id == ListingParcel.listing_id)
             .where(ListingParcel.dzialka_id == dzialka_id)
             .order_by(ListingParcel.created_at.desc())
             .limit(1)
         )
-        row = result.scalar_one_or_none()
-        return row
+        row = result.first()
+        if row is None:
+            return None, None
+        listing_id, price_zl = row
+        return listing_id, (Decimal(str(price_zl)) if price_zl is not None else None)
+
+    async def _backfill_missing_price_per_m2(self) -> int:
+        """Refresh price_per_m2_zl for existing leads using current Bronze prices."""
+        result = await self.db.execute(select(InvestmentLead))
+        leads = result.scalars().all()
+        updated = 0
+
+        for lead in leads:
+            dzialka = await self.db.get(Dzialka, lead.dzialka_id)
+            if dzialka is None or not dzialka.area_m2 or dzialka.area_m2 <= 0:
+                continue
+            _, listing_price_zl = await self._fetch_listing_context(lead.dzialka_id)
+            if listing_price_zl is None:
+                continue
+            refreshed_price = (
+                listing_price_zl / Decimal(str(dzialka.area_m2))
+            ).quantize(Decimal("0.01"))
+            if lead.price_per_m2_zl == refreshed_price:
+                continue
+            lead.price_per_m2_zl = refreshed_price
+            lead.updated_at = datetime.now(timezone.utc)
+            updated += 1
+
+        if updated:
+            await self.db.commit()
+        return updated
 
 
 # ---------------------------------------------------------------------------

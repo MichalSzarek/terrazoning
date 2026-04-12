@@ -1,0 +1,842 @@
+[
+  {
+    "dzialka_id": "842b0a1e-7309-4c85-9d2c-bf2799411313",
+    "identyfikator": "240404201.827",
+    "parcel_number": "827",
+    "teryt_gmina": "2404042",
+    "province": "slaskie",
+    "label": "tempting_false_positive",
+    "expected_band": null,
+    "notes": "Gmina wiejska pow. częstochowski; wysoki overall zawyżony przez cheapness i heurystyki przestrzenne; strefa nierozpoznana — brak geometrii uniemożliwia weryfikację przeznaczenia",
+    "source_hint": "mpzp_project: mixed_residential (MPZP 2404042)",
+    "metrics": {
+      "overall_score": 61.0,
+      "future_signal_score": 41.0,
+      "cheapness_score": 20.0,
+      "price_per_m2_zl": 3.89,
+      "has_formal_geometry": false,
+      "has_supporting_formal": true,
+      "has_hard_negative": false
+    }
+  },
+  {
+    "dzialka_id": "2c3c2dff-31bc-4cb9-9052-6ee384be2e69",
+    "identyfikator": "121306202.88/31",
+    "parcel_number": "88/31",
+    "teryt_gmina": "1213062",
+    "province": "malopolskie",
+    "label": "true_positive",
+    "expected_band": "supported",
+    "notes": "Seed candidate for manual validation/review.",
+    "source_hint": "planning_resolution: unknown (w sprawie: uchwalenia studium uwarunkowań i kierunków zagospodarowania przestrzennego gminy Oświęcim)",
+    "metrics": {
+      "overall_score": 50.0,
+      "future_signal_score": 30.0,
+      "cheapness_score": 20.0,
+      "price_per_m2_zl": 38.52,
+      "has_formal_geometry": false,
+      "has_supporting_formal": true,
+      "has_hard_negative": false
+    }
+  },
+  {
+    "dzialka_id": "63090b14-b001-40f7-ae46-2ccf7988f84a",
+    "identyfikator": "121306202.88/46",
+    "parcel_number": "88/46",
+    "teryt_gmina": "1213062",
+    "province": "malopolskie",
+    "label": "true_positive",
+    "expected_band": "supported",
+    "notes": "Seed candidate for manual validation/review.",
+    "source_hint": "planning_resolution: unknown (w sprawie: uchwalenia studium uwarunkowań i kierunków zagospodarowania przestrzennego gminy Oświęcim)",
+    "metrics": {
+      "overall_score": 50.0,
+      "future_signal_score": 30.0,
+      "cheapness_score": 20.0,
+      "price_per_m2_zl": 25.88,
+      "has_formal_geometry": false,
+      "has_supporting_formal": true,
+      "has_hard_negative": false
+    }
+  },
+  {
+    "dzialka_id": "809cbbad-7737-4368-b0c0-74eaa5eeffd3",
+    "identyfikator": "121306202.88/50",
+    "parcel_number": "88/50",
+    "teryt_gmina": "1213062",
+    "province": "malopolskie",
+    "label": "true_positive",
+    "expected_band": "supported",
+    "notes": "Seed candidate for manual validation/review.",
+    "source_hint": "planning_resolution: unknown (w sprawie: uchwalenia studium uwarunkowań i kierunków zagospodarowania przestrzennego gminy Oświęcim)",
+    "metrics": {
+      "overall_score": 50.0,
+      "future_signal_score": 30.0,
+      "cheapness_score": 20.0,
+      "price_per_m2_zl": 5.34,
+      "has_formal_geometry": false,
+      "has_supporting_formal": true,
+      "has_hard_negative": false
+    }
+  },
+  {
+    "dzialka_id": "f110c517-170a-4afa-aaf2-919feb4ac78e",
+    "identyfikator": "240501101.1/2",
+    "parcel_number": "1/2",
+    "teryt_gmina": "2405011",
+    "province": "slaskie",
+    "label": "true_positive",
+    "expected_band": "supported",
+    "notes": "Seed candidate for manual validation/review.",
+    "source_hint": null,
+    "metrics": {
+      "overall_score": 59.0,
+      "future_signal_score": 39.0,
+      "cheapness_score": 20.0,
+      "price_per_m2_zl": 33.11,
+      "has_formal_geometry": false,
+      "has_supporting_formal": false,
+      "has_hard_negative": false
+    }
+  },
+  {
+    "dzialka_id": "2d317fad-8434-4ce5-ad2c-86a27bb1be63",
+    "identyfikator": "121801401.2998/63",
+    "parcel_number": "2998/63",
+    "teryt_gmina": "1218014",
+    "province": "malopolskie",
+    "label": "true_positive",
+    "expected_band": "supported",
+    "notes": "Seed candidate for manual validation/review.",
+    "source_hint": null,
+    "metrics": {
+      "overall_score": 50.0,
+      "future_signal_score": 40.0,
+      "cheapness_score": 10.0,
+      "price_per_m2_zl": 186.15,
+      "has_formal_geometry": false,
+      "has_supporting_formal": false,
+      "has_hard_negative": false
+    }
+  },
+  {
+    "dzialka_id": "adf87588-b807-4e57-af65-8c0e6a7e57a3",
+    "identyfikator": "247201103.2853",
+    "parcel_number": "2853",
+    "teryt_gmina": "2472011",
+    "province": "slaskie",
+    "label": "true_positive",
+    "expected_band": "supported",
+    "notes": "Seed candidate for manual validation/review.",
+    "source_hint": null,
+    "metrics": {
+      "overall_score": 48.0,
+      "future_signal_score": 48.0,
+      "cheapness_score": 0.0,
+      "price_per_m2_zl": 395.11,
+      "has_formal_geometry": false,
+      "has_supporting_formal": false,
+      "has_hard_negative": false
+    }
+  },
+  {
+    "dzialka_id": "7dc64faf-9dd6-45d4-b0d5-6476b629926a",
+    "identyfikator": "121306202.277/18",
+    "parcel_number": "277/18",
+    "teryt_gmina": "1213062",
+    "province": "malopolskie",
+    "label": "true_positive",
+    "expected_band": "supported",
+    "notes": "Seed candidate for manual validation/review.",
+    "source_hint": "planning_resolution: unknown (w sprawie: uchwalenia studium uwarunkowań i kierunków zagospodarowania przestrzennego gminy Oświęcim)",
+    "metrics": {
+      "overall_score": 40.0,
+      "future_signal_score": 30.0,
+      "cheapness_score": 10.0,
+      "price_per_m2_zl": 50.42,
+      "has_formal_geometry": false,
+      "has_supporting_formal": true,
+      "has_hard_negative": false
+    }
+  },
+  {
+    "dzialka_id": "ad5120fb-dcb9-4d83-9c06-ef09ba175e9e",
+    "identyfikator": "121306202.86/23",
+    "parcel_number": "86/23",
+    "teryt_gmina": "1213062",
+    "province": "malopolskie",
+    "label": "true_positive",
+    "expected_band": "supported",
+    "notes": "Seed candidate for manual validation/review.",
+    "source_hint": "planning_resolution: unknown (w sprawie: uchwalenia studium uwarunkowań i kierunków zagospodarowania przestrzennego gminy Oświęcim)",
+    "metrics": {
+      "overall_score": 40.0,
+      "future_signal_score": 30.0,
+      "cheapness_score": 10.0,
+      "price_per_m2_zl": 59.71,
+      "has_formal_geometry": false,
+      "has_supporting_formal": true,
+      "has_hard_negative": false
+    }
+  },
+  {
+    "dzialka_id": "c046b5b1-ca28-4a10-966e-9a9475fa21d3",
+    "identyfikator": "121306202.86/26",
+    "parcel_number": "86/26",
+    "teryt_gmina": "1213062",
+    "province": "malopolskie",
+    "label": "true_positive",
+    "expected_band": "supported",
+    "notes": "Seed candidate for manual validation/review.",
+    "source_hint": "planning_resolution: unknown (w sprawie: uchwalenia studium uwarunkowań i kierunków zagospodarowania przestrzennego gminy Oświęcim)",
+    "metrics": {
+      "overall_score": 40.0,
+      "future_signal_score": 30.0,
+      "cheapness_score": 10.0,
+      "price_per_m2_zl": 51.97,
+      "has_formal_geometry": false,
+      "has_supporting_formal": true,
+      "has_hard_negative": false
+    }
+  },
+  {
+    "dzialka_id": "c0d127e7-acce-4f17-ac99-fad3fce696cb",
+    "identyfikator": "240408201.1766",
+    "parcel_number": "1766",
+    "teryt_gmina": "2404082",
+    "province": "slaskie",
+    "label": "tempting_false_positive",
+    "expected_band": null,
+    "notes": "Seed candidate for manual validation/review.",
+    "source_hint": "planning_resolution: industrial (POG 2404082)",
+    "metrics": {
+      "overall_score": 30.0,
+      "future_signal_score": 10.0,
+      "cheapness_score": 20.0,
+      "price_per_m2_zl": 13.4,
+      "has_formal_geometry": false,
+      "has_supporting_formal": true,
+      "has_hard_negative": false
+    }
+  },
+  {
+    "dzialka_id": "2c3c2dff-31bc-4cb9-9052-6ee384be2e69",
+    "identyfikator": "121306202.88/31",
+    "parcel_number": "88/31",
+    "teryt_gmina": "1213062",
+    "province": "malopolskie",
+    "label": "tempting_false_positive",
+    "expected_band": null,
+    "notes": "Seed candidate for manual validation/review.",
+    "source_hint": "planning_resolution: unknown (w sprawie: uchwalenia studium uwarunkowań i kierunków zagospodarowania przestrzennego gminy Oświęcim)",
+    "metrics": {
+      "overall_score": 50.0,
+      "future_signal_score": 30.0,
+      "cheapness_score": 20.0,
+      "price_per_m2_zl": 38.52,
+      "has_formal_geometry": false,
+      "has_supporting_formal": true,
+      "has_hard_negative": false
+    }
+  },
+  {
+    "dzialka_id": "4e34ad8c-bc9c-4ff8-88cd-4bfadae6c663",
+    "identyfikator": "241201403.663/30",
+    "parcel_number": "663/30",
+    "teryt_gmina": "2412014",
+    "province": "slaskie",
+    "label": "tempting_false_positive",
+    "expected_band": null,
+    "notes": "Seed candidate for manual validation/review.",
+    "source_hint": "planning_resolution: residential (SUiKZP 2412014)",
+    "metrics": {
+      "overall_score": 30.0,
+      "future_signal_score": 10.0,
+      "cheapness_score": 20.0,
+      "price_per_m2_zl": 55.29,
+      "has_formal_geometry": false,
+      "has_supporting_formal": true,
+      "has_hard_negative": false
+    }
+  },
+  {
+    "dzialka_id": "63090b14-b001-40f7-ae46-2ccf7988f84a",
+    "identyfikator": "121306202.88/46",
+    "parcel_number": "88/46",
+    "teryt_gmina": "1213062",
+    "province": "malopolskie",
+    "label": "tempting_false_positive",
+    "expected_band": null,
+    "notes": "Seed candidate for manual validation/review.",
+    "source_hint": "planning_resolution: unknown (w sprawie: uchwalenia studium uwarunkowań i kierunków zagospodarowania przestrzennego gminy Oświęcim)",
+    "metrics": {
+      "overall_score": 50.0,
+      "future_signal_score": 30.0,
+      "cheapness_score": 20.0,
+      "price_per_m2_zl": 25.88,
+      "has_formal_geometry": false,
+      "has_supporting_formal": true,
+      "has_hard_negative": false
+    }
+  },
+  {
+    "dzialka_id": "300e2317-a644-4521-8fec-e75f5d1b0c2b",
+    "identyfikator": "241608501.348",
+    "parcel_number": "348",
+    "teryt_gmina": "2416085",
+    "province": "slaskie",
+    "label": "tempting_false_positive",
+    "expected_band": null,
+    "notes": "Zmiana studium = aktywny proces planistyczny, ale kierunek przeznaczenia nieznany; Szczekociny ~4 tys. mieszk.",
+    "source_hint": "planning_resolution: mixed_residential (SUiKZP 2416085)",
+    "metrics": {
+      "overall_score": 30.0,
+      "future_signal_score": 10.0,
+      "cheapness_score": 20.0,
+      "price_per_m2_zl": 4.32,
+      "has_formal_geometry": false,
+      "has_supporting_formal": true,
+      "has_hard_negative": false
+    }
+  },
+  {
+    "dzialka_id": "809cbbad-7737-4368-b0c0-74eaa5eeffd3",
+    "identyfikator": "121306202.88/50",
+    "parcel_number": "88/50",
+    "teryt_gmina": "1213062",
+    "province": "malopolskie",
+    "label": "tempting_false_positive",
+    "expected_band": null,
+    "notes": "Seed candidate for manual validation/review.",
+    "source_hint": "planning_resolution: unknown (w sprawie: uchwalenia studium uwarunkowań i kierunków zagospodarowania przestrzennego gminy Oświęcim)",
+    "metrics": {
+      "overall_score": 50.0,
+      "future_signal_score": 30.0,
+      "cheapness_score": 20.0,
+      "price_per_m2_zl": 5.34,
+      "has_formal_geometry": false,
+      "has_supporting_formal": true,
+      "has_hard_negative": false
+    }
+  },
+  {
+    "dzialka_id": "81c8d70f-d197-46ff-a352-207fc350de6b",
+    "identyfikator": "240902516.85/4",
+    "parcel_number": "85/4",
+    "teryt_gmina": "2409025",
+    "province": "slaskie",
+    "label": "tempting_false_positive",
+    "expected_band": null,
+    "notes": "Seed candidate for manual validation/review.",
+    "source_hint": "planning_resolution: unknown (Studium uwarunkowań i kierunków zagospodarowania przestrzennego gminy i miasta Koziegłowy)",
+    "metrics": {
+      "overall_score": 30.0,
+      "future_signal_score": 20.0,
+      "cheapness_score": 10.0,
+      "price_per_m2_zl": 34.99,
+      "has_formal_geometry": false,
+      "has_supporting_formal": true,
+      "has_hard_negative": false
+    }
+  },
+  {
+    "dzialka_id": "7dc64faf-9dd6-45d4-b0d5-6476b629926a",
+    "identyfikator": "121306202.277/18",
+    "parcel_number": "277/18",
+    "teryt_gmina": "1213062",
+    "province": "malopolskie",
+    "label": "tempting_false_positive",
+    "expected_band": null,
+    "notes": "Seed candidate for manual validation/review.",
+    "source_hint": "planning_resolution: unknown (w sprawie: uchwalenia studium uwarunkowań i kierunków zagospodarowania przestrzennego gminy Oświęcim)",
+    "metrics": {
+      "overall_score": 40.0,
+      "future_signal_score": 30.0,
+      "cheapness_score": 10.0,
+      "price_per_m2_zl": 50.42,
+      "has_formal_geometry": false,
+      "has_supporting_formal": true,
+      "has_hard_negative": false
+    }
+  },
+  {
+    "dzialka_id": "858b1225-b8f4-4d40-b283-d7b1e90739d6",
+    "identyfikator": "241608501.346",
+    "parcel_number": "346",
+    "teryt_gmina": "2416085",
+    "province": "slaskie",
+    "label": "tempting_false_positive",
+    "expected_band": null,
+    "notes": "j.w. Szczekociny — zmiana studium, strefa nieznana; niższy cheapness (10)",
+    "source_hint": "planning_resolution: mixed_residential (SUiKZP 2416085)",
+    "metrics": {
+      "overall_score": 20.0,
+      "future_signal_score": 10.0,
+      "cheapness_score": 10.0,
+      "price_per_m2_zl": 5.23,
+      "has_formal_geometry": false,
+      "has_supporting_formal": true,
+      "has_hard_negative": false
+    }
+  },
+  {
+    "dzialka_id": "ad5120fb-dcb9-4d83-9c06-ef09ba175e9e",
+    "identyfikator": "121306202.86/23",
+    "parcel_number": "86/23",
+    "teryt_gmina": "1213062",
+    "province": "malopolskie",
+    "label": "tempting_false_positive",
+    "expected_band": null,
+    "notes": "Seed candidate for manual validation/review.",
+    "source_hint": "planning_resolution: unknown (w sprawie: uchwalenia studium uwarunkowań i kierunków zagospodarowania przestrzennego gminy Oświęcim)",
+    "metrics": {
+      "overall_score": 40.0,
+      "future_signal_score": 30.0,
+      "cheapness_score": 10.0,
+      "price_per_m2_zl": 59.71,
+      "has_formal_geometry": false,
+      "has_supporting_formal": true,
+      "has_hard_negative": false
+    }
+  },
+  {
+    "dzialka_id": "62031b2a-1d1f-41b9-a1a5-97a4f1ca4a6f",
+    "identyfikator": "240609220.1357/7",
+    "parcel_number": "1357/7",
+    "teryt_gmina": "2406092",
+    "province": "slaskie",
+    "label": "true_negative",
+    "expected_band": null,
+    "notes": "Strefa przemysłowa + hard negative; jednoznaczny reject",
+    "source_hint": null,
+    "metrics": {
+      "overall_score": 0.0,
+      "future_signal_score": 0.0,
+      "cheapness_score": 0.0,
+      "price_per_m2_zl": 141.84,
+      "has_formal_geometry": false,
+      "has_supporting_formal": false,
+      "has_hard_negative": true
+    }
+  },
+  {
+    "dzialka_id": "c6d86412-e245-467e-a1b2-577074e4447c",
+    "identyfikator": "121701111.101/2",
+    "parcel_number": "101/2",
+    "teryt_gmina": "1217011",
+    "province": "malopolskie",
+    "label": "true_negative",
+    "expected_band": null,
+    "notes": "Studium wskazuje MN z geometrią, ale hard_negative neguje sygnał (future=0); prawdopodobny konflikt z obowiązującym MPZP lub ograniczenie środowiskowe",
+    "source_hint": "studium_zone: residential (001)",
+    "metrics": {
+      "overall_score": 20.0,
+      "future_signal_score": 0.0,
+      "cheapness_score": 20.0,
+      "price_per_m2_zl": 3520.6,
+      "has_formal_geometry": true,
+      "has_supporting_formal": true,
+      "has_hard_negative": true
+    }
+  },
+  {
+    "dzialka_id": "9c63855c-8141-4ac9-8b55-3d99b29c51dd",
+    "identyfikator": "246601161.15/58",
+    "parcel_number": "15/58",
+    "teryt_gmina": "2466011",
+    "province": "slaskie",
+    "label": "true_negative",
+    "expected_band": null,
+    "notes": "Brak jakiegokolwiek sygnału planistycznego + hard negative",
+    "source_hint": null,
+    "metrics": {
+      "overall_score": 0.0,
+      "future_signal_score": 0.0,
+      "cheapness_score": 0.0,
+      "price_per_m2_zl": 117.88,
+      "has_formal_geometry": false,
+      "has_supporting_formal": false,
+      "has_hard_negative": true
+    }
+  },
+  {
+    "dzialka_id": "e0871a86-b2c4-418b-b596-0cdfdcd45e2f",
+    "identyfikator": "121701111.106/2",
+    "parcel_number": "106/2",
+    "teryt_gmina": "1217011",
+    "province": "malopolskie",
+    "label": "true_negative",
+    "expected_band": null,
+    "notes": "Przypadek graniczny: studium MN z geometrią + overall 48, ale hard_negative blokuje; future_signal=28 sugeruje częściowy sygnał — do ponownej oceny jeśli hard_neg zostanie usunięty",
+    "source_hint": "studium_zone: residential (001)",
+    "metrics": {
+      "overall_score": 38.0,
+      "future_signal_score": 18.0,
+      "cheapness_score": 20.0,
+      "price_per_m2_zl": 1904.54,
+      "has_formal_geometry": true,
+      "has_supporting_formal": true,
+      "has_hard_negative": true
+    }
+  },
+  {
+    "dzialka_id": "43864c90-f29c-40a8-b7c9-6f5eaf11ce39",
+    "identyfikator": "240609206.60",
+    "parcel_number": "60",
+    "teryt_gmina": "2406092",
+    "province": "slaskie",
+    "label": "true_negative",
+    "expected_band": null,
+    "notes": "Strefa przemysłowa + hard negative",
+    "source_hint": null,
+    "metrics": {
+      "overall_score": 20.0,
+      "future_signal_score": 0.0,
+      "cheapness_score": 20.0,
+      "price_per_m2_zl": 8.75,
+      "has_formal_geometry": false,
+      "has_supporting_formal": false,
+      "has_hard_negative": true
+    }
+  },
+  {
+    "dzialka_id": "99f7f87f-0964-4374-a7ba-8e39b65eedcd",
+    "identyfikator": "120102207.161/1",
+    "parcel_number": "161/1",
+    "teryt_gmina": "1201022",
+    "province": "malopolskie",
+    "label": "true_negative",
+    "expected_band": null,
+    "notes": "Brak jakichkolwiek sygnałów planistycznych",
+    "source_hint": null,
+    "metrics": {
+      "overall_score": 0.0,
+      "future_signal_score": 0.0,
+      "cheapness_score": 0.0,
+      "price_per_m2_zl": 15.92,
+      "has_formal_geometry": false,
+      "has_supporting_formal": false,
+      "has_hard_negative": false
+    }
+  },
+  {
+    "dzialka_id": "860d2cd7-ef86-4407-a132-806e1054b09a",
+    "identyfikator": "246601161.15/59",
+    "parcel_number": "15/59",
+    "teryt_gmina": "2466011",
+    "province": "slaskie",
+    "label": "true_negative",
+    "expected_band": null,
+    "notes": "Studium MN/MW Gliwice z geometrią, ale hard_negative nadpisuje kierunek; potencjał długoterminowy jeśli bloker zostanie zdjęty",
+    "source_hint": "studium_zone: mixed_residential (Studium uwarunkowań i kierunków zagospodarowania przestrzennego miasta Gliwice)",
+    "metrics": {
+      "overall_score": 39.0,
+      "future_signal_score": 19.0,
+      "cheapness_score": 20.0,
+      "price_per_m2_zl": 2.27,
+      "has_formal_geometry": true,
+      "has_supporting_formal": false,
+      "has_hard_negative": true
+    }
+  },
+  {
+    "dzialka_id": "06edb723-5f6b-4422-971b-92edb91ab43d",
+    "identyfikator": "120303401.1155/17",
+    "parcel_number": "1155/17",
+    "teryt_gmina": "1203034",
+    "province": "malopolskie",
+    "label": "true_negative",
+    "expected_band": null,
+    "notes": "Brak sygnałów",
+    "source_hint": null,
+    "metrics": {
+      "overall_score": 0.0,
+      "future_signal_score": 0.0,
+      "cheapness_score": 0.0,
+      "price_per_m2_zl": 39.96,
+      "has_formal_geometry": false,
+      "has_supporting_formal": false,
+      "has_hard_negative": false
+    }
+  },
+  {
+    "dzialka_id": "5eb4e465-f0e8-47a5-a30b-46e191dfbbc6",
+    "identyfikator": "240107508.54",
+    "parcel_number": "54",
+    "teryt_gmina": "2401075",
+    "province": "slaskie",
+    "label": "true_negative",
+    "expected_band": null,
+    "notes": "Brak sygnałów",
+    "source_hint": null,
+    "metrics": {
+      "overall_score": 0.0,
+      "future_signal_score": 0.0,
+      "cheapness_score": 0.0,
+      "price_per_m2_zl": 168.55,
+      "has_formal_geometry": false,
+      "has_supporting_formal": false,
+      "has_hard_negative": false
+    }
+  },
+  {
+    "dzialka_id": "4a723101-011e-47ff-a63e-20bcd393317b",
+    "identyfikator": "120602208.492/2",
+    "parcel_number": "492/2",
+    "teryt_gmina": "1206022",
+    "province": "malopolskie",
+    "label": "true_negative",
+    "expected_band": null,
+    "notes": "Brak sygnałów",
+    "source_hint": null,
+    "metrics": {
+      "overall_score": 0.0,
+      "future_signal_score": 0.0,
+      "cheapness_score": 0.0,
+      "price_per_m2_zl": 595.83,
+      "has_formal_geometry": false,
+      "has_supporting_formal": false,
+      "has_hard_negative": false
+    }
+  },
+  {
+    "dzialka_id": "01b94c33-85c3-4869-9f60-9e312137028f",
+    "identyfikator": "120106510.1443/4",
+    "parcel_number": "1443/4",
+    "teryt_gmina": "1201065",
+    "province": "12",
+    "label": "tempting_false_positive",
+    "expected_band": null,
+    "notes": "Tożsama działka co #2; POG bez klasyfikacji strefy",
+    "source_hint": "mpzp_project: mixed_residential (MPZP 1201065)",
+    "metrics": {
+      "overall_score": 30.0,
+      "future_signal_score": 10.0,
+      "cheapness_score": 20.0,
+      "price_per_m2_zl": 6.87,
+      "has_formal_geometry": false,
+      "has_supporting_formal": true,
+      "has_hard_negative": false
+    }
+  },
+  {
+    "dzialka_id": "112fc6ab-0ad7-4e2f-a5cb-b6fca81703e3",
+    "identyfikator": "121306202.277/12",
+    "parcel_number": "277/12",
+    "teryt_gmina": "1213062",
+    "province": "12",
+    "label": "tempting_false_positive",
+    "expected_band": null,
+    "notes": "Tożsama działka co #4",
+    "source_hint": null,
+    "metrics": {
+      "overall_score": 20.0,
+      "future_signal_score": 0.0,
+      "cheapness_score": 20.0,
+      "price_per_m2_zl": 4.02,
+      "has_formal_geometry": false,
+      "has_supporting_formal": false,
+      "has_hard_negative": false
+    }
+  },
+  {
+    "dzialka_id": "eb709663-7481-4607-ae75-184e39fdcd6f",
+    "identyfikator": "121306202.277/13",
+    "parcel_number": "277/13",
+    "teryt_gmina": "1213062",
+    "province": "12",
+    "label": "tempting_false_positive",
+    "expected_band": null,
+    "notes": "Tożsama działka co #6",
+    "source_hint": null,
+    "metrics": {
+      "overall_score": 20.0,
+      "future_signal_score": 0.0,
+      "cheapness_score": 20.0,
+      "price_per_m2_zl": 17.76,
+      "has_formal_geometry": false,
+      "has_supporting_formal": false,
+      "has_hard_negative": false
+    }
+  },
+  {
+    "dzialka_id": "b03cffc1-2138-4b29-a03c-dda4201ead24",
+    "identyfikator": "121306202.277/23",
+    "parcel_number": "277/23",
+    "teryt_gmina": "1213062",
+    "province": "12",
+    "label": "tempting_false_positive",
+    "expected_band": null,
+    "notes": "Tożsama działka co #8",
+    "source_hint": null,
+    "metrics": {
+      "overall_score": 20.0,
+      "future_signal_score": 0.0,
+      "cheapness_score": 20.0,
+      "price_per_m2_zl": 3.69,
+      "has_formal_geometry": false,
+      "has_supporting_formal": false,
+      "has_hard_negative": false
+    }
+  },
+  {
+    "dzialka_id": "05a458c7-5c79-462c-aae3-9e848430f2d7",
+    "identyfikator": "121306202.76/18",
+    "parcel_number": "76/18",
+    "teryt_gmina": "1213062",
+    "province": "12",
+    "label": "tempting_false_positive",
+    "expected_band": null,
+    "notes": "Tożsama działka co #10",
+    "source_hint": null,
+    "metrics": {
+      "overall_score": 20.0,
+      "future_signal_score": 0.0,
+      "cheapness_score": 20.0,
+      "price_per_m2_zl": 42.56,
+      "has_formal_geometry": false,
+      "has_supporting_formal": false,
+      "has_hard_negative": false
+    }
+  },
+  {
+    "dzialka_id": "ef222300-d093-4287-b1a2-28f848f1dce0",
+    "identyfikator": "240902516.218/2",
+    "parcel_number": "218/2",
+    "teryt_gmina": "2409025",
+    "province": "24",
+    "label": "tempting_false_positive",
+    "expected_band": null,
+    "notes": "Koziegłowy — gm. miejsko-wiejska pow. myszkowski; najsłabszy sygnał w grupie TFP (overall 40, future 20); cheapness jedynym wzmocnieniem",
+    "source_hint": null,
+    "metrics": {
+      "overall_score": 20.0,
+      "future_signal_score": 0.0,
+      "cheapness_score": 20.0,
+      "price_per_m2_zl": 1.45,
+      "has_formal_geometry": false,
+      "has_supporting_formal": false,
+      "has_hard_negative": true
+    }
+  },
+  {
+    "dzialka_id": "a5a51cd5-add9-4f4d-a3ae-b5c09ce5fc9d",
+    "identyfikator": "241402101.708/1",
+    "parcel_number": "708/1",
+    "teryt_gmina": "2414021",
+    "province": "24",
+    "label": "tempting_false_positive",
+    "expected_band": null,
+    "notes": "Imielin — miasto w GZM, presja urbanizacyjna wyższa niż gm. wiejska, ale strefa unknown + brak geometrii = brak potwierdzenia; ~60% miasta pokryte MPZP w innych lokalizacjach",
+    "source_hint": null,
+    "metrics": {
+      "overall_score": 20.0,
+      "future_signal_score": 0.0,
+      "cheapness_score": 20.0,
+      "price_per_m2_zl": 11.75,
+      "has_formal_geometry": false,
+      "has_supporting_formal": false,
+      "has_hard_negative": true
+    }
+  },
+  {
+    "dzialka_id": "8b859767-7ce9-40ce-ad89-234e681cf473",
+    "identyfikator": "241404201.1010/49",
+    "parcel_number": "1010/49",
+    "teryt_gmina": "2414042",
+    "province": "24",
+    "label": "true_negative",
+    "expected_band": null,
+    "notes": "REKLASYFIKACJA: POG wskazuje strefę przemysłową — wyklucza zabudowę mieszkaniową; silnik nie flaguje industrial jako hard_negative, ale z perspektywy planistycznej P/AG =/= MN",
+    "source_hint": null,
+    "metrics": {
+      "overall_score": 20.0,
+      "future_signal_score": 0.0,
+      "cheapness_score": 20.0,
+      "price_per_m2_zl": 6571.76,
+      "has_formal_geometry": false,
+      "has_supporting_formal": false,
+      "has_hard_negative": true
+    }
+  },
+  {
+    "dzialka_id": "00ac058d-317a-4d40-86be-792866f34e41",
+    "identyfikator": "246601161.15/36",
+    "parcel_number": "15/36",
+    "teryt_gmina": "2466011",
+    "province": "24",
+    "label": "true_positive",
+    "expected_band": "supported",
+    "notes": "Gliwice 200k+ mieszk.; strefa MN/MW w studium z geometrią = silna podstawa planistyczna; 59 pkt to 1 pkt poniżej formal, ale kierunek jednoznaczny",
+    "source_hint": "studium_zone: mixed_residential (Studium uwarunkowań i kierunków zagospodarowania przestrzennego miasta Gliwice)",
+    "metrics": {
+      "overall_score": 59.0,
+      "future_signal_score": 59.0,
+      "cheapness_score": 0.0,
+      "price_per_m2_zl": 118.7,
+      "has_formal_geometry": true,
+      "has_supporting_formal": false,
+      "has_hard_negative": false
+    }
+  },
+  {
+    "dzialka_id": "65b4d3c0-0545-4fb2-bf73-fee5ecfcdcf7",
+    "identyfikator": "246601161.15/45",
+    "parcel_number": "15/45",
+    "teryt_gmina": "2466011",
+    "province": "24",
+    "label": "true_positive",
+    "expected_band": "supported",
+    "notes": "j.w. Gliwice MN/MW z geometrią",
+    "source_hint": "studium_zone: mixed_residential (Studium uwarunkowań i kierunków zagospodarowania przestrzennego miasta Gliwice)",
+    "metrics": {
+      "overall_score": 59.0,
+      "future_signal_score": 59.0,
+      "cheapness_score": 0.0,
+      "price_per_m2_zl": 87.05,
+      "has_formal_geometry": true,
+      "has_supporting_formal": false,
+      "has_hard_negative": false
+    }
+  },
+  {
+    "dzialka_id": "64f1f7fc-fc01-47fd-86ff-bc1ae61cface",
+    "identyfikator": "246601161.15/60",
+    "parcel_number": "15/60",
+    "teryt_gmina": "2466011",
+    "province": "24",
+    "label": "true_positive",
+    "expected_band": "supported",
+    "notes": "j.w. Gliwice MN/MW z geometrią",
+    "source_hint": "studium_zone: mixed_residential (Studium uwarunkowań i kierunków zagospodarowania przestrzennego miasta Gliwice)",
+    "metrics": {
+      "overall_score": 59.0,
+      "future_signal_score": 59.0,
+      "cheapness_score": 0.0,
+      "price_per_m2_zl": 73.9,
+      "has_formal_geometry": true,
+      "has_supporting_formal": false,
+      "has_hard_negative": false
+    }
+  },
+  {
+    "dzialka_id": "b6daf756-5adf-4cd7-82e8-50b9ed2e8ec7",
+    "identyfikator": "246601161.15/63",
+    "parcel_number": "15/63",
+    "teryt_gmina": "2466011",
+    "province": "24",
+    "label": "true_positive",
+    "expected_band": "supported",
+    "notes": "j.w. Gliwice MN/MW z geometrią",
+    "source_hint": "studium_zone: mixed_residential (Studium uwarunkowań i kierunków zagospodarowania przestrzennego miasta Gliwice)",
+    "metrics": {
+      "overall_score": 59.0,
+      "future_signal_score": 59.0,
+      "cheapness_score": 0.0,
+      "price_per_m2_zl": 16.25,
+      "has_formal_geometry": true,
+      "has_supporting_formal": false,
+      "has_hard_negative": false
+    }
+  }
+]

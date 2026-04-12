@@ -16,6 +16,8 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.v1.health import router as health_router
 from app.api.v1.leads import router as leads_router
+from app.api.v1.quarantine_parcels import router as quarantine_parcels_router
+from app.api.v1.watchlist import router as watchlist_router
 from app.core.config import settings
 from app.core.database import engine
 
@@ -72,6 +74,8 @@ def create_app() -> FastAPI:
     # Routers
     app.include_router(health_router, prefix="/api/v1")
     app.include_router(leads_router, prefix="/api/v1")
+    app.include_router(quarantine_parcels_router, prefix="/api/v1")
+    app.include_router(watchlist_router, prefix="/api/v1")
 
     return app
 

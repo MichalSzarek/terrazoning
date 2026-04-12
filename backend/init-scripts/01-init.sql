@@ -73,6 +73,7 @@ CREATE TABLE bronze.raw_listings (
     raw_powiat          TEXT,
     raw_wojewodztwo     TEXT,
     raw_kw              TEXT,                       -- nr Księgi Wieczystej (jeśli znaleziony)
+    sygnatura_akt       TEXT,                       -- np. 'Km 123/25' dla druga-licytacja detection
 
     -- Evidence Chain pointers
     raw_html_ref        TEXT,                       -- ścieżka do bronze.raw_documents lub GCS URI
@@ -95,6 +96,8 @@ CREATE UNIQUE INDEX idx_raw_listings_dedup
     ON bronze.raw_listings (dedup_hash);
 CREATE INDEX idx_raw_listings_source_type
     ON bronze.raw_listings (source_type, created_at DESC);
+CREATE INDEX idx_raw_listings_sygn_kw
+    ON bronze.raw_listings (sygnatura_akt, raw_kw);
 CREATE INDEX idx_raw_listings_unprocessed
     ON bronze.raw_listings (is_processed) WHERE NOT is_processed;
 CREATE INDEX idx_raw_listings_scrape_run
@@ -248,7 +251,7 @@ CREATE TABLE silver.listing_parcels (
     match_confidence NUMERIC(3,2) NOT NULL DEFAULT 0.00
                      CHECK (match_confidence >= 0.00 AND match_confidence <= 1.00),
     match_method     TEXT        NOT NULL
-                     CHECK (match_method IN ('teryt_exact', 'kw_lookup', 'address_fuzzy', 'manual')),
+                     CHECK (match_method IN ('teryt_exact', 'kw_lookup', 'address_fuzzy', 'uldk_partial', 'manual')),
     created_at       TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
@@ -320,13 +323,23 @@ CREATE TABLE gold.planning_zones (
     area_m2             NUMERIC(14,2)
                         GENERATED ALWAYS AS (ST_Area(geom)) STORED,
 
+    -- Spatial dedup key: "{round(centroid_x)}_{round(centroid_y)}" in EPSG:2180.
+    -- Computed in Python before insert; allows many zones with same przeznaczenie
+    -- (e.g. multiple MN zones in a city) to coexist.
+    geom_hash           TEXT            NOT NULL,
+
     -- Metadata źródła
     source_wfs_url      TEXT,                       -- WFS/GML endpoint użyty do ingestionu
     ingested_at         TIMESTAMPTZ     NOT NULL DEFAULT now(),
     plan_effective_date DATE,
 
     created_at          TIMESTAMPTZ     NOT NULL DEFAULT now(),
-    updated_at          TIMESTAMPTZ     NOT NULL DEFAULT now()
+    updated_at          TIMESTAMPTZ     NOT NULL DEFAULT now(),
+
+    -- Deduplication: same polygon from same source → upsert on re-ingest
+    -- geom_hash encodes centroid rounded to 1 m; two real zones never share a centroid.
+    CONSTRAINT uq_planning_zones_spatial_key
+        UNIQUE (source_wfs_url, teryt_gmina, przeznaczenie, geom_hash)
 );
 
 COMMENT ON TABLE gold.planning_zones IS
@@ -479,6 +492,121 @@ BEGIN
         RAISE EXCEPTION 'Schema creation failed: expected 3 schemas, found %', schema_count;
     END IF;
 END $$;
+
+-- =============================================================================
+-- FUTURE-BUILDABILITY EXTENSION
+-- Separate investor workflow for parcels that are not buildable today but may
+-- become buildable under POG / Studium / related planning signals.
+-- =============================================================================
+
+CREATE TABLE IF NOT EXISTS gold.planning_signals (
+    id                      UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    dzialka_id              UUID REFERENCES silver.dzialki(id) ON DELETE CASCADE,
+    teryt_gmina             TEXT NOT NULL,
+    signal_kind             TEXT NOT NULL
+                            CHECK (signal_kind IN ('pog_zone', 'pog_ouz', 'studium_zone', 'mpzp_project', 'planning_resolution', 'coverage_only')),
+    signal_status           TEXT NOT NULL
+                            CHECK (signal_status IN ('formal_binding', 'formal_directional', 'formal_preparatory', 'heuristic')),
+    designation_raw         TEXT,
+    designation_normalized  TEXT,
+    description             TEXT,
+    plan_name               TEXT,
+    uchwala_nr              TEXT,
+    effective_date          DATE,
+    source_url              TEXT,
+    source_type             TEXT NOT NULL DEFAULT 'manual_registry'
+                            CHECK (source_type IN ('wfs', 'wms_grid', 'gison_popup', 'pdf', 'html_index', 'planning_zone_passthrough', 'manual_registry')),
+    source_confidence       NUMERIC(3,2) NOT NULL DEFAULT 1.00
+                            CHECK (source_confidence >= 0.00 AND source_confidence <= 1.00),
+    legal_weight            NUMERIC(6,2) NOT NULL DEFAULT 0.00,
+    geom                    GEOMETRY(MultiPolygon, 2180),
+    evidence_chain          JSONB NOT NULL DEFAULT '[]'::jsonb,
+    created_at              TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at              TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_planning_signals_geom
+    ON gold.planning_signals USING GIST (geom);
+CREATE INDEX IF NOT EXISTS idx_planning_signals_gmina
+    ON gold.planning_signals (teryt_gmina);
+CREATE INDEX IF NOT EXISTS idx_planning_signals_kind
+    ON gold.planning_signals (signal_kind);
+CREATE INDEX IF NOT EXISTS idx_planning_signals_status
+    ON gold.planning_signals (signal_status);
+CREATE INDEX IF NOT EXISTS idx_planning_signals_dzialka
+    ON gold.planning_signals (dzialka_id) WHERE dzialka_id IS NOT NULL;
+
+CREATE TABLE IF NOT EXISTS gold.future_buildability_assessments (
+    id                              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    dzialka_id                      UUID NOT NULL REFERENCES silver.dzialki(id) ON DELETE CASCADE,
+    listing_id                      UUID REFERENCES bronze.raw_listings(id) ON DELETE SET NULL,
+    strategy_type                   TEXT NOT NULL DEFAULT 'future_buildable'
+                                    CHECK (strategy_type = 'future_buildable'),
+    current_use                     TEXT,
+    current_buildable_status        TEXT NOT NULL
+                                    CHECK (current_buildable_status IN ('non_buildable', 'mixed', 'already_buildable')),
+    future_signal_score             NUMERIC(6,2) NOT NULL
+                                    CHECK (future_signal_score >= 0.00 AND future_signal_score <= 100.00),
+    cheapness_score                 NUMERIC(6,2) NOT NULL DEFAULT 0.00
+                                    CHECK (cheapness_score >= 0.00 AND cheapness_score <= 100.00),
+    overall_score                   NUMERIC(6,2) NOT NULL
+                                    CHECK (overall_score >= 0.00 AND overall_score <= 100.00),
+    confidence_band                 TEXT
+                                    CHECK (confidence_band IN ('formal', 'supported', 'speculative') OR confidence_band IS NULL),
+    dominant_future_signal          TEXT,
+    future_signal_count             INTEGER NOT NULL DEFAULT 0,
+    distance_to_nearest_buildable_m NUMERIC(12,2),
+    adjacent_buildable_pct          NUMERIC(5,2),
+    price_per_m2_zl                 NUMERIC(10,2),
+    status                          TEXT NOT NULL DEFAULT 'assessed',
+    evidence_chain                  JSONB NOT NULL DEFAULT '[]'::jsonb,
+    signal_breakdown                JSONB NOT NULL DEFAULT '[]'::jsonb,
+    created_at                      TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at                      TIMESTAMPTZ NOT NULL DEFAULT now(),
+    CONSTRAINT uq_future_assessments_dzialka UNIQUE (dzialka_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_future_assessments_listing
+    ON gold.future_buildability_assessments (listing_id);
+CREATE INDEX IF NOT EXISTS idx_future_assessments_score
+    ON gold.future_buildability_assessments (overall_score DESC);
+
+ALTER TABLE gold.investment_leads
+    ADD COLUMN IF NOT EXISTS strategy_type TEXT NOT NULL DEFAULT 'current_buildable',
+    ADD COLUMN IF NOT EXISTS confidence_band TEXT,
+    ADD COLUMN IF NOT EXISTS future_signal_score NUMERIC(6,2),
+    ADD COLUMN IF NOT EXISTS cheapness_score NUMERIC(6,2),
+    ADD COLUMN IF NOT EXISTS overall_score NUMERIC(6,2),
+    ADD COLUMN IF NOT EXISTS dominant_future_signal TEXT,
+    ADD COLUMN IF NOT EXISTS future_signal_count INTEGER,
+    ADD COLUMN IF NOT EXISTS distance_to_nearest_buildable_m NUMERIC(12,2),
+    ADD COLUMN IF NOT EXISTS adjacent_buildable_pct NUMERIC(5,2),
+    ADD COLUMN IF NOT EXISTS signal_breakdown JSONB NOT NULL DEFAULT '[]'::jsonb;
+
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint
+        WHERE conname = 'ck_leads_strategy_type'
+          AND connamespace = 'gold'::regnamespace
+    ) THEN
+        ALTER TABLE gold.investment_leads
+            ADD CONSTRAINT ck_leads_strategy_type
+            CHECK (strategy_type IN ('current_buildable', 'future_buildable'));
+    END IF;
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint
+        WHERE conname = 'ck_leads_confidence_band'
+          AND connamespace = 'gold'::regnamespace
+    ) THEN
+        ALTER TABLE gold.investment_leads
+            ADD CONSTRAINT ck_leads_confidence_band
+            CHECK (confidence_band IN ('formal', 'supported', 'speculative') OR confidence_band IS NULL);
+    END IF;
+END $$;
+
+CREATE INDEX IF NOT EXISTS idx_leads_strategy
+    ON gold.investment_leads (strategy_type);
 
 -- Verify PostGIS EPSG:2180 is registered
 DO $$

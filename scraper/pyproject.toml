@@ -23,6 +23,10 @@ dependencies = [
 
     # Async task coordination
     "anyio>=4.7.0",
+
+    # Gemini fallback extractor (Vertex AI via ADC)
+    "google-auth>=2.25.0",
+    "google-genai>=1.30.0",
 ]
 
 [dependency-groups]

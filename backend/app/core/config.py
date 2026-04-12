@@ -1,4 +1,4 @@
-from pydantic import Field, PostgresDsn, computed_field
+from pydantic import Field, PostgresDsn, computed_field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -24,6 +24,18 @@ class Settings(BaseSettings):
     app_version: str = "0.1.0"
     debug: bool = False
     log_level: str = "INFO"
+
+    @field_validator("debug", mode="before")
+    @classmethod
+    def parse_debug(cls, value: object) -> object:
+        """Accept common env-style debug values beyond strict booleans."""
+        if isinstance(value, str):
+            normalized = value.strip().lower()
+            if normalized in {"1", "true", "yes", "on", "debug", "dev", "development"}:
+                return True
+            if normalized in {"0", "false", "no", "off", "release", "prod", "production"}:
+                return False
+        return value
 
     # -------------------------------------------------------------------------
     # Database — PostgreSQL + PostGIS
@@ -71,6 +83,31 @@ class Settings(BaseSettings):
     # External APIs
     # -------------------------------------------------------------------------
     uldk_base_url: str = "https://uldk.gugik.gov.pl"
+    komornik_notice_api_base_url: str = (
+        "https://licytacje.komornik.pl/services/item-back/rest/item/notice"
+    )
+    komornik_notice_basic_auth: str = (
+        "Basic ZS1hdWN0aW9uc19hcHA6ZS1hdWN0aW9uc0AxMjM="
+    )
+
+    # -------------------------------------------------------------------------
+    # LLM fallback extractor — Gemini on Vertex AI
+    # Uses ADC locally (`gcloud auth application-default login`) or the
+    # attached service account in Cloud Run / GCE. If gcp_project_id is empty,
+    # the extractor will try to discover it from ADC at runtime.
+    # -------------------------------------------------------------------------
+    gcp_project_id: str = ""
+    gcp_location: str = "global"
+    vertex_model: str = "gemini-2.5-flash"
+    llm_fallback_enabled: bool = True
+    llm_timeout_s: int = 20
+    llm_max_output_tokens: int = 256
+    llm_temperature: float = 0.0
+
+    # -------------------------------------------------------------------------
+    # Feature flags
+    # -------------------------------------------------------------------------
+    future_buildability_enabled: bool = True
 
 
 # Module-level singleton — import this everywhere

@@ -14,6 +14,7 @@ from sqlalchemy import (
     Boolean,
     CheckConstraint,
     Date,
+    DateTime,
     ForeignKey,
     Index,
     Integer,
@@ -52,9 +53,9 @@ class ScrapeRun(Base):
     )
     source_name: Mapped[str] = mapped_column(Text, nullable=False)
     started_at: Mapped[datetime] = mapped_column(
-        server_default=func.now(), nullable=False
+        DateTime(timezone=True), server_default=func.now(), nullable=False
     )
-    finished_at: Mapped[Optional[datetime]] = mapped_column(nullable=True)
+    finished_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     status: Mapped[str] = mapped_column(
         Text,
         CheckConstraint(
@@ -77,7 +78,7 @@ class ScrapeRun(Base):
         nullable=False,
     )
     created_at: Mapped[datetime] = mapped_column(
-        server_default=func.now(), nullable=False
+        DateTime(timezone=True), server_default=func.now(), nullable=False
     )
 
     # Relationships
@@ -104,6 +105,11 @@ class RawListing(Base):
     __tablename__ = "raw_listings"
     __table_args__ = (
         UniqueConstraint("dedup_hash", name="uq_raw_listings_dedup"),
+        # Composite index for "druga licytacja" detection: same case + same KW.
+        # Partial (WHERE both columns NOT NULL) because komornik cases and KWs
+        # may not always be extractable. A PostgreSQL partial unique index is
+        # created in init SQL — this B-tree index covers lookup performance.
+        Index("idx_raw_listings_sygn_kw", "sygnatura_akt", "raw_kw"),
         Index("idx_raw_listings_source_type", "source_type", "created_at"),
         Index(
             "idx_raw_listings_unprocessed",
@@ -151,6 +157,11 @@ class RawListing(Base):
     raw_wojewodztwo: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     raw_kw: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
+    # Komornik case number — canonical form: "Km 123/25".
+    # Used to detect "druga licytacja" (same property, second auction at lower price).
+    # Extracted by regex from obwieszczenie text. NULL when not found.
+    sygnatura_akt: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+
     # Evidence Chain pointers
     raw_html_ref: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     raw_pdf_ref: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
@@ -162,9 +173,10 @@ class RawListing(Base):
     )
 
     created_at: Mapped[datetime] = mapped_column(
-        server_default=func.now(), nullable=False
+        DateTime(timezone=True), server_default=func.now(), nullable=False
     )
     updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
         server_default=func.now(),
         onupdate=func.now(),
         nullable=False,
@@ -224,10 +236,10 @@ class RawDocument(Base):
     file_size_bytes: Mapped[Optional[int]] = mapped_column(BigInteger, nullable=True)
     content_hash: Mapped[str] = mapped_column(Text, nullable=False)
     captured_at: Mapped[datetime] = mapped_column(
-        server_default=func.now(), nullable=False
+        DateTime(timezone=True), server_default=func.now(), nullable=False
     )
     created_at: Mapped[datetime] = mapped_column(
-        server_default=func.now(), nullable=False
+        DateTime(timezone=True), server_default=func.now(), nullable=False
     )
 
     # Relationships

@@ -1,0 +1,39 @@
+# OS files
+.DS_Store
+Thumbs.db
+
+# Environment files
+**/.env
+**/.env.*
+!**/.env.example
+
+# Python
+**/__pycache__/
+**/*.py[cod]
+**/.python-version
+**/.pytest_cache/
+**/.ruff_cache/
+**/.mypy_cache/
+**/.coverage
+**/.coverage.*
+**/htmlcov/
+**/.hypothesis/
+**/.tox/
+**/.nox/
+**/.venv/
+**/venv/
+**/*.egg-info/
+**/build/
+**/dist/
+
+# Frontend
+**/node_modules/
+**/.vite/
+**/coverage/
+**/*.tsbuildinfo
+
+# Runtime data and local outputs
+**/.runtime/
+**/*.log
+**/*.sqlite3
+**/*.db

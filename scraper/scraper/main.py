@@ -38,8 +38,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import settings
 from app.core.database import AsyncSessionLocal
 from app.models.bronze import RawListing, ScrapeRun
+from scraper.extractors.llm_extractor import LLMExtractor, extract_with_fallback
 from scraper.extractors.kw import ExtractionSource, KwMatch, extract_kw_from_text
 from scraper.extractors.parcel import ParcelMatch, extract_obreb, extract_parcel_ids
+from scraper.extractors.price import extract_price_from_text, parse_polish_decimal
 
 logger = logging.getLogger(__name__)
 
@@ -84,10 +86,18 @@ class ExtractionPayload:
     all_kw_matches: list[dict]       # serialised KwMatch list
     all_parcel_matches: list[dict]   # serialised ParcelMatch list
 
+    # Komornik case number — canonical "Km 123/25".
+    # Used for "druga licytacja" detection: same case + same KW at a lower price
+    # is the SECOND auction of the same property, not a new listing.
+    # NULL when pattern not found in obwieszczenie text.
+    sygnatura_akt: str | None = None
+
     # Extraction quality flags
     kw_check_valid: bool = False
     kw_court_known: bool = False
     extraction_confidence: float = 0.0
+    llm_fallback_used: bool = False
+    llm_extraction: dict[str, Any] | None = None
 
 
 @dataclass
@@ -223,6 +233,7 @@ class LicytacjeScraper:
     def __init__(self, db: AsyncSession) -> None:
         self.db = db
         self._request_semaphore = asyncio.Semaphore(2)  # max 2 concurrent requests
+        self._llm_extractor = LLMExtractor()
 
     # ------------------------------------------------------------------
     # Public orchestration entry point
@@ -246,7 +257,7 @@ class LicytacjeScraper:
                 url = page_spec["url"]
                 html = page_spec["html"]
                 try:
-                    payload = self._parse_listing(url, html)
+                    payload = await self._parse_listing(url, html)
                     outcome = await self.save_listing(scrape_run.id, payload)
                     if outcome == "saved":
                         saved += 1
@@ -285,6 +296,8 @@ class LicytacjeScraper:
                     error_message=str(exc),
                 )
             raise
+        finally:
+            await self._llm_extractor.aclose()
 
     # ------------------------------------------------------------------
     # Database operations
@@ -343,8 +356,41 @@ class LicytacjeScraper:
         """Upsert a raw listing into bronze.raw_listings.
 
         Returns 'saved' if new record inserted, 'skipped' if dedup_hash collision.
-        The UPSERT uses ON CONFLICT DO NOTHING — idempotent, safe to retry.
+
+        Druga licytacja detection (Red Flag 4):
+        Before the normal dedup_hash INSERT, we check whether a record already
+        exists for the same (sygnatura_akt, raw_kw) pair. A second bailiff auction
+        of the same property changes the obwieszczenie text (different price, date)
+        → different SHA-256 → would normally create a phantom duplicate.
+        Instead: UPDATE the prior record's price/date and re-queue for processing.
         """
+        # --- Druga licytacja detection ---
+        if payload.sygnatura_akt and payload.raw_kw:
+            existing_result = await self.db.execute(
+                select(RawListing)
+                .where(
+                    RawListing.sygnatura_akt == payload.sygnatura_akt,
+                    RawListing.raw_kw == payload.raw_kw,
+                )
+                .limit(1)
+            )
+            existing = existing_result.scalar_one_or_none()
+            if existing is not None:
+                logger.info(
+                    "DRUGA LICYTACJA detected: sygnatura=%s kw=%s "
+                    "— updating prior listing %s (price %s → %s, date %s → %s)",
+                    payload.sygnatura_akt, payload.raw_kw, existing.id,
+                    existing.price_zl, payload.price_zl,
+                    existing.auction_date, payload.auction_date,
+                )
+                # Update only operational fields — raw_text preserved for Evidence Chain
+                existing.price_zl = payload.price_zl
+                existing.auction_date = payload.auction_date
+                existing.source_url = payload.source_url
+                existing.is_processed = False   # re-queue for geo_resolver
+                await self.db.commit()
+                return "saved"
+
         dedup_hash = self._compute_dedup_hash(payload.source_url, payload.raw_text)
 
         # Persist the full extraction metadata as Evidence Chain JSON
@@ -354,6 +400,8 @@ class LicytacjeScraper:
             "all_parcel_matches": payload.all_parcel_matches,
             "kw_check_valid": payload.kw_check_valid,
             "extraction_confidence": payload.extraction_confidence,
+            "llm_fallback_used": payload.llm_fallback_used,
+            "llm_extraction": payload.llm_extraction,
         }
         # In production: upload to GCS, store URI in raw_html_ref.
         # For now: store as inline JSON reference (development mode).
@@ -378,6 +426,7 @@ class LicytacjeScraper:
                 raw_wojewodztwo=payload.raw_wojewodztwo,
                 raw_html_ref=evidence_ref,
                 dedup_hash=dedup_hash,
+                sygnatura_akt=payload.sygnatura_akt,
                 is_processed=False,
             )
             .on_conflict_do_nothing(index_elements=["dedup_hash"])
@@ -417,7 +466,7 @@ class LicytacjeScraper:
         """
         return extract_kw_from_text(raw_text, source=ExtractionSource.FREE_TEXT_REGEX)
 
-    def _parse_listing(self, url: str, html: str) -> ExtractionPayload:
+    async def _parse_listing(self, url: str, html: str) -> ExtractionPayload:
         """Parse raw HTML into a structured ExtractionPayload.
 
         Applies all extraction passes with confidence scoring.
@@ -452,23 +501,40 @@ class LicytacjeScraper:
                 )
 
         # ---- Extract parcel IDs ----
-        parcel_matches = extract_parcel_ids(raw_text)
-        primary_parcel = parcel_matches[0] if parcel_matches else None
-
-        # ---- Extract obręb ----
-        obreb_name, _ = extract_obreb(raw_text)
-
         # ---- Extract location fields (gmina, powiat, województwo) ----
         gmina, powiat, woj = _extract_location(raw_text)
+
+        # ---- Extract parcel IDs + LLM fallback ----
+        parcel_result = await extract_with_fallback(
+            raw_text,
+            title=title_text,
+            raw_gmina=gmina,
+            raw_kw=primary_kw.normalized if primary_kw else None,
+            llm_extractor=self._llm_extractor,
+        )
+        parcel_matches = parcel_result.parcel_matches
+        primary_parcel = parcel_result.primary_parcel
+        obreb_name = parcel_result.obreb_name
+        if not gmina and parcel_result.municipality:
+            gmina = parcel_result.municipality
 
         # ---- Extract price ----
         price = _extract_price(raw_text)
 
         # ---- Extract area ----
         area = _extract_area(raw_text)
+        if area is None and parcel_result.area_text:
+            llm_area = parse_polish_decimal(parcel_result.area_text)
+            if llm_area is not None and Decimal("0.5") <= llm_area <= Decimal("10000000"):
+                area = llm_area
 
         # ---- Extract auction date ----
         auction_date = _extract_date(raw_text)
+
+        # ---- Extract komornik case number (druga licytacja detection) ----
+        sygnatura_akt = _extract_sygnatura(raw_text)
+        if sygnatura_akt:
+            logger.debug("[Scraper] sygnatura_akt=%s url=%s", sygnatura_akt, url)
 
         # ---- Aggregate confidence ----
         # Overall extraction confidence = geometric mean of primary fields
@@ -489,11 +555,14 @@ class LicytacjeScraper:
             raw_gmina=gmina,
             raw_powiat=powiat,
             raw_wojewodztwo=woj,
+            sygnatura_akt=sygnatura_akt,
             all_kw_matches=[_serialise_kw(m) for m in kw_matches],
             all_parcel_matches=[_serialise_parcel(m) for m in parcel_matches],
             kw_check_valid=primary_kw.check_valid if primary_kw else False,
             kw_court_known=primary_kw.court_known if primary_kw else False,
             extraction_confidence=extraction_confidence,
+            llm_fallback_used=parcel_result.llm_used,
+            llm_extraction=parcel_result.llm_extraction,
         )
 
     # ------------------------------------------------------------------
@@ -515,44 +584,66 @@ class LicytacjeScraper:
 # Field-level extraction helpers
 # ---------------------------------------------------------------------------
 
-_RE_PRICE = re.compile(
-    r"(\d[\d\s]*(?:,\d{2})?)\s*z[łl]",  # handles: 853 333,33 zł / zl
-    re.IGNORECASE,
-)
 _RE_AREA = re.compile(
-    r"(\d[\d\s]*(?:[.,]\d+)?)\s*m(?:²|2)\b",
+    r"(\d[\d\s\u00A0\u202F\u2007\u2009.,]*\d|\d)\s*m(?:²|2)\b",
     re.IGNORECASE,
 )
 _RE_DATE_PL = re.compile(
     r"\b(\d{1,2})[.\-/](\d{1,2})[.\-/](\d{4})\b"   # DD.MM.YYYY / DD-MM-YYYY
 )
-_RE_GMINA = re.compile(r"gmina\s+([\w\sąćęłńóśźżĄĆĘŁŃÓŚŹŻ\-]+?)(?:,|\.|\s*(?:powiat|woj))", re.IGNORECASE)
+# Gmina: capture 1–2 words after "gmina" keyword.
+# Deliberately limited to 2 words — all Polish gmina names fit within this.
+# The old terminator approach broke when ":" appeared before "," in the text.
+_RE_GMINA = re.compile(
+    r"\bgmina\s+([\wąćęłńóśźżĄĆĘŁŃÓŚŹŻ\-]+(?:\s+[\wąćęłńóśźżĄĆĘŁŃÓŚŹŻ\-]+)?)",
+    re.IGNORECASE,
+)
 _RE_POWIAT = re.compile(r"powiat\s+([\w\sąćęłńóśźżĄĆĘŁŃÓŚŹŻ\-]+?)(?:,|\.|\s*woj)", re.IGNORECASE)
-_RE_WOJ = re.compile(r"woj(?:ewództwo)?\s+([\w\sąćęłńóśźżĄĆĘŁŃÓŚŹŻ\-]+?)(?:,|\.|$)", re.IGNORECASE)
+
+# Primary: explicit "woj." / "województwo" prefix
+_RE_WOJ = re.compile(r"woj(?:ewództwo)?\s+([\wąćęłńóśźżĄĆĘŁŃÓŚŹŻ\-]+?)(?:,|\.|$)", re.IGNORECASE)
+# Fallback: standalone province adjective (appears after map_* icon or in address lines)
+# Covers the new portal format: "map_lodzkie łódzkie map_marker ..."
+_RE_WOJ_STANDALONE = re.compile(
+    r"\b(mazowieckie|śląskie|slaskie|małopolskie|malopolskie|łódzkie|lodzkie|"
+    r"dolnośląskie|dolnoslaskie|wielkopolskie|pomorskie|kujawsko-pomorskie|"
+    r"lubelskie|podkarpackie|lubuskie|warmińsko-mazurskie|warminsko-mazurskie|"
+    r"podlaskie|opolskie|świętokrzyskie|swietokrzyskie|zachodniopomorskie)\b",
+    re.IGNORECASE,
+)
+
+# Komornik case number — "Km 123/25" or "Km 1234/2026" or "Kmp 12/26".
+# Covers standard (Km) and majątkowy (Kmp) types.
+# Word boundary (\b) prevents matching inside longer codes like "Kmn 1/25".
+_RE_SYGN = re.compile(r"\bKm[pP]?\s+(\d{1,5}/\d{2,4})\b", re.IGNORECASE)
+
+
+def _extract_sygnatura(text: str) -> str | None:
+    """Extract komornik case number from obwieszczenie text.
+
+    Returns canonical form: 'Km 123/25' (always uppercase Km + single space).
+    Returns None when the pattern is not found.
+    """
+    m = _RE_SYGN.search(text)
+    if m:
+        prefix = "Kmp" if "mp" in m.group(0).lower() else "Km"
+        return f"{prefix} {m.group(1)}"
+    return None
 
 
 def _extract_price(text: str) -> Decimal | None:
     """Extract the first złoty amount from text (most likely the oszacowanie price)."""
-    for m in _RE_PRICE.finditer(text):
-        raw = m.group(1).replace(" ", "").replace(",", ".")
-        try:
-            return Decimal(raw)
-        except Exception:
-            continue
-    return None
+    return extract_price_from_text(text)
 
 
 def _extract_area(text: str) -> Decimal | None:
     """Extract surface area in m² from text."""
     for m in _RE_AREA.finditer(text):
-        raw = m.group(1).replace(" ", "").replace(",", ".")
-        try:
-            val = Decimal(raw)
-            # Sanity: Polish parcels range 1 m² to ~10 000 000 m² (1000 ha)
-            if Decimal("0.5") <= val <= Decimal("10_000_000"):
-                return val
-        except Exception:
+        val = parse_polish_decimal(m.group(1))
+        if val is None:
             continue
+        if Decimal("0.5") <= val <= Decimal("10000000"):
+            return val
     return None
 
 
@@ -571,11 +662,19 @@ def _extract_location(text: str) -> tuple[str | None, str | None, str | None]:
     """Extract (gmina, powiat, województwo) strings from free text."""
     gmina_m = _RE_GMINA.search(text)
     powiat_m = _RE_POWIAT.search(text)
+
+    # Try explicit "woj./województwo" prefix first; fall back to standalone province name
     woj_m = _RE_WOJ.search(text)
+    if woj_m:
+        woj = woj_m.group(1).strip()
+    else:
+        woj_m2 = _RE_WOJ_STANDALONE.search(text)
+        woj = woj_m2.group(1).strip() if woj_m2 else None
+
     return (
         gmina_m.group(1).strip() if gmina_m else None,
         powiat_m.group(1).strip() if powiat_m else None,
-        woj_m.group(1).strip() if woj_m else None,
+        woj,
     )
 
 

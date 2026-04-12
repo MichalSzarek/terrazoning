@@ -22,6 +22,7 @@ from sqlalchemy import (
     Boolean,
     CheckConstraint,
     Computed,
+    DateTime,
     ForeignKey,
     Index,
     Integer,
@@ -42,8 +43,8 @@ from app.models.bronze import RawListing
 # silver.dzialki
 # ---------------------------------------------------------------------------
 
-RESOLUTION_STATUSES = ("pending", "resolved", "failed", "retry")
-MATCH_METHODS = ("teryt_exact", "kw_lookup", "address_fuzzy", "manual")
+RESOLUTION_STATUSES = ("pending", "resolved", "failed", "retry", "geometry_missing")
+MATCH_METHODS = ("teryt_exact", "kw_lookup", "address_fuzzy", "uldk_partial", "manual")
 
 
 class Dzialka(Base):
@@ -93,6 +94,14 @@ class Dzialka(Base):
     # Canonical spatial key: {teryt_obreb}.{numer_dzialki}
     identyfikator: Mapped[str] = mapped_column(Text, nullable=False)
 
+    # EGiB land use code — required for genuine delta detection.
+    # Source: Ewidencja Gruntów i Budynków (EGIB) / GUGiK.
+    # Common codes: R (grunty orne), Ł (łąki), Ps (pastwiska), Ls (las),
+    #   Lz (zadrzewione), S (sady), B (tereny mieszkaniowe - ALREADY BUILT),
+    #   Ba (przemysłowe), Bi (inne zabudowane), Bp (zurbanizowane niezabudowane).
+    # NULL when not yet fetched from EGiB. Delta Engine SKIPS leads without this field.
+    current_use: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+
     # Geometry — EPSG:2180 enforced by GeoAlchemy2
     # spatial_index=False: index is managed in migrations, not auto-created here.
     geom: Mapped[Any] = mapped_column(
@@ -107,7 +116,7 @@ class Dzialka(Base):
     )
 
     # ULDK API metadata
-    uldk_response_date: Mapped[Optional[datetime]] = mapped_column(nullable=True)
+    uldk_response_date: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     uldk_raw_response: Mapped[Optional[dict]] = mapped_column(JSONB, nullable=True)
 
     # Confidence & resolution pipeline state
@@ -124,9 +133,10 @@ class Dzialka(Base):
     failure_reason: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(
-        server_default=func.now(), nullable=False
+        DateTime(timezone=True), server_default=func.now(), nullable=False
     )
     updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
         server_default=func.now(),
         onupdate=func.now(),
         nullable=False,
@@ -139,12 +149,6 @@ class Dzialka(Base):
     listing_parcels: Mapped[list["ListingParcel"]] = relationship(
         "ListingParcel", back_populates="dzialka", lazy="select"
     )
-    dlq_entries: Mapped[list["DlqParcel"]] = relationship(
-        "DlqParcel", back_populates="listing", lazy="select",
-        primaryjoin="DlqParcel.listing_id == foreign(Dzialka.id)",
-        viewonly=True,
-    )
-
     def __repr__(self) -> str:
         return (
             f"<Dzialka id={self.id} identyfikator={self.identyfikator!r} "
@@ -185,11 +189,12 @@ class KsiegaWieczysta(Base):
     is_verified: Mapped[bool] = mapped_column(
         Boolean, server_default=text("false"), nullable=False
     )
-    verified_at: Mapped[Optional[datetime]] = mapped_column(nullable=True)
+    verified_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
-        server_default=func.now(), nullable=False
+        DateTime(timezone=True), server_default=func.now(), nullable=False
     )
     updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
         server_default=func.now(),
         onupdate=func.now(),
         nullable=False,
@@ -252,7 +257,7 @@ class ListingParcel(Base):
     )
     match_method: Mapped[str] = mapped_column(Text, nullable=False)
     created_at: Mapped[datetime] = mapped_column(
-        server_default=func.now(), nullable=False
+        DateTime(timezone=True), server_default=func.now(), nullable=False
     )
 
     # Relationships
@@ -310,12 +315,15 @@ class DlqParcel(Base):
     )
     last_error: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     next_retry_at: Mapped[datetime] = mapped_column(
-        server_default=text("now() + INTERVAL '1 hour'"), nullable=False
+        DateTime(timezone=True),
+        server_default=text("now() + INTERVAL '1 hour'"),
+        nullable=False,
     )
     created_at: Mapped[datetime] = mapped_column(
-        server_default=func.now(), nullable=False
+        DateTime(timezone=True), server_default=func.now(), nullable=False
     )
     updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
         server_default=func.now(),
         onupdate=func.now(),
         nullable=False,

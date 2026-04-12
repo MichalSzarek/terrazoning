@@ -1,0 +1,542 @@
+[
+  {
+    "dzialka_id": "a5a51cd5-add9-4f4d-a3ae-b5c09ce5fc9d",
+    "identyfikator": "241402101.708/1",
+    "province": "slaskie",
+    "label": "true_positive",
+    "expected_band": null,
+    "notes": "Seed candidate for manual validation/review.",
+    "source_hint": "planning_resolution: unknown (w sprawie uchwalenia Studium uwarunkowań i kierunków zagospodarowania przestrzennego Miasta Imielin)",
+    "metrics": {
+      "overall_score": 50.0,
+      "future_signal_score": 30.0,
+      "cheapness_score": 20.0,
+      "price_per_m2_zl": 11.75,
+      "has_formal_geometry": false,
+      "has_supporting_formal": true,
+      "has_hard_negative": false
+    }
+  },
+  {
+    "dzialka_id": "01b94c33-85c3-4869-9f60-9e312137028f",
+    "identyfikator": "120106510.1443/4",
+    "province": "malopolskie",
+    "label": "true_positive",
+    "expected_band": null,
+    "notes": "Seed candidate for manual validation/review.",
+    "source_hint": "planning_resolution: unknown (w sprawie uchwalenia studium uwarunkowań i kierunków zagospodarowania przestrzennego Gminy Nowy Wiśnicz)",
+    "metrics": {
+      "overall_score": 50.0,
+      "future_signal_score": 30.0,
+      "cheapness_score": 20.0,
+      "price_per_m2_zl": 6.87,
+      "has_formal_geometry": false,
+      "has_supporting_formal": true,
+      "has_hard_negative": false
+    }
+  },
+  {
+    "dzialka_id": "842b0a1e-7309-4c85-9d2c-bf2799411313",
+    "identyfikator": "240404201.827",
+    "province": "slaskie",
+    "label": "true_positive",
+    "expected_band": null,
+    "notes": "Seed candidate for manual validation/review.",
+    "source_hint": "planning_resolution: unknown (Studium uwarunkowań i kierunków zagospodarowania przestrzennego Gminy Kamienica Polska)",
+    "metrics": {
+      "overall_score": 45.0,
+      "future_signal_score": 25.0,
+      "cheapness_score": 20.0,
+      "price_per_m2_zl": 3.89,
+      "has_formal_geometry": false,
+      "has_supporting_formal": true,
+      "has_hard_negative": false
+    }
+  },
+  {
+    "dzialka_id": "112fc6ab-0ad7-4e2f-a5cb-b6fca81703e3",
+    "identyfikator": "121306202.277/12",
+    "province": "malopolskie",
+    "label": "true_positive",
+    "expected_band": null,
+    "notes": "Seed candidate for manual validation/review.",
+    "source_hint": "planning_resolution: unknown (POG 1213062)",
+    "metrics": {
+      "overall_score": 50.0,
+      "future_signal_score": 30.0,
+      "cheapness_score": 20.0,
+      "price_per_m2_zl": 4.02,
+      "has_formal_geometry": false,
+      "has_supporting_formal": true,
+      "has_hard_negative": false
+    }
+  },
+  {
+    "dzialka_id": "62e905cb-fd4f-4b2f-ad43-90ebab2a183c",
+    "identyfikator": "121809503.3827/1",
+    "province": "malopolskie",
+    "label": "true_positive",
+    "expected_band": null,
+    "notes": "Seed candidate for manual validation/review.",
+    "source_hint": "planning_resolution: unknown (w sprawie zmiany studium uwarunkowań i kierunków zagospodarowania przestrzennego gminy Wadowice)",
+    "metrics": {
+      "overall_score": 50.0,
+      "future_signal_score": 30.0,
+      "cheapness_score": 20.0,
+      "price_per_m2_zl": 25.27,
+      "has_formal_geometry": false,
+      "has_supporting_formal": true,
+      "has_hard_negative": false
+    }
+  },
+  {
+    "dzialka_id": "872435bf-9d50-49ca-9772-39a5f817e016",
+    "identyfikator": "240902501.2440",
+    "province": "slaskie",
+    "label": "true_positive",
+    "expected_band": null,
+    "notes": "Seed candidate for manual validation/review.",
+    "source_hint": "planning_resolution: unknown (Studium uwarunkowań i kierunków zagospodarowania przestrzennego gminy i miasta Koziegłowy)",
+    "metrics": {
+      "overall_score": 40.0,
+      "future_signal_score": 20.0,
+      "cheapness_score": 20.0,
+      "price_per_m2_zl": 1.43,
+      "has_formal_geometry": false,
+      "has_supporting_formal": true,
+      "has_hard_negative": false
+    }
+  },
+  {
+    "dzialka_id": "300e2317-a644-4521-8fec-e75f5d1b0c2b",
+    "identyfikator": "241608501.348",
+    "province": "slaskie",
+    "label": "true_positive",
+    "expected_band": null,
+    "notes": "Seed candidate for manual validation/review.",
+    "source_hint": "planning_resolution: unknown (w sprawie uchwalenia zmiany Studium uwarunkowań i kierunków zagospodarowania przestrzennego Miasta i Gminy Szczekociny)",
+    "metrics": {
+      "overall_score": 40.0,
+      "future_signal_score": 20.0,
+      "cheapness_score": 20.0,
+      "price_per_m2_zl": 4.32,
+      "has_formal_geometry": false,
+      "has_supporting_formal": true,
+      "has_hard_negative": false
+    }
+  },
+  {
+    "dzialka_id": "33f677a3-34e0-48ef-8167-84f2b222708c",
+    "identyfikator": "121306202.32",
+    "province": "malopolskie",
+    "label": "true_positive",
+    "expected_band": null,
+    "notes": "Seed candidate for manual validation/review.",
+    "source_hint": "planning_resolution: unknown (POG 1213062)",
+    "metrics": {
+      "overall_score": 30.0,
+      "future_signal_score": 30.0,
+      "cheapness_score": 0.0,
+      "price_per_m2_zl": 96.03,
+      "has_formal_geometry": false,
+      "has_supporting_formal": true,
+      "has_hard_negative": false
+    }
+  },
+  {
+    "dzialka_id": "858b1225-b8f4-4d40-b283-d7b1e90739d6",
+    "identyfikator": "241608501.346",
+    "province": "slaskie",
+    "label": "true_positive",
+    "expected_band": null,
+    "notes": "Seed candidate for manual validation/review.",
+    "source_hint": "planning_resolution: unknown (w sprawie uchwalenia zmiany Studium uwarunkowań i kierunków zagospodarowania przestrzennego Miasta i Gminy Szczekociny)",
+    "metrics": {
+      "overall_score": 30.0,
+      "future_signal_score": 20.0,
+      "cheapness_score": 10.0,
+      "price_per_m2_zl": 5.23,
+      "has_formal_geometry": false,
+      "has_supporting_formal": true,
+      "has_hard_negative": false
+    }
+  },
+  {
+    "dzialka_id": "34dd49a7-a448-44da-842d-c1bb49c7dbd6",
+    "identyfikator": "120506204.262/3",
+    "province": "malopolskie",
+    "label": "true_positive",
+    "expected_band": null,
+    "notes": "Seed candidate for manual validation/review.",
+    "source_hint": null,
+    "metrics": {
+      "overall_score": 20.0,
+      "future_signal_score": 0.0,
+      "cheapness_score": 20.0,
+      "price_per_m2_zl": 45.42,
+      "has_formal_geometry": false,
+      "has_supporting_formal": false,
+      "has_hard_negative": false
+    }
+  },
+  {
+    "dzialka_id": "a5a51cd5-add9-4f4d-a3ae-b5c09ce5fc9d",
+    "identyfikator": "241402101.708/1",
+    "province": "slaskie",
+    "label": "tempting_false_positive",
+    "expected_band": null,
+    "notes": "Seed candidate for manual validation/review.",
+    "source_hint": "planning_resolution: unknown (w sprawie uchwalenia Studium uwarunkowań i kierunków zagospodarowania przestrzennego Miasta Imielin)",
+    "metrics": {
+      "overall_score": 50.0,
+      "future_signal_score": 30.0,
+      "cheapness_score": 20.0,
+      "price_per_m2_zl": 11.75,
+      "has_formal_geometry": false,
+      "has_supporting_formal": true,
+      "has_hard_negative": false
+    }
+  },
+  {
+    "dzialka_id": "01b94c33-85c3-4869-9f60-9e312137028f",
+    "identyfikator": "120106510.1443/4",
+    "province": "malopolskie",
+    "label": "tempting_false_positive",
+    "expected_band": null,
+    "notes": "Seed candidate for manual validation/review.",
+    "source_hint": "planning_resolution: unknown (w sprawie uchwalenia studium uwarunkowań i kierunków zagospodarowania przestrzennego Gminy Nowy Wiśnicz)",
+    "metrics": {
+      "overall_score": 50.0,
+      "future_signal_score": 30.0,
+      "cheapness_score": 20.0,
+      "price_per_m2_zl": 6.87,
+      "has_formal_geometry": false,
+      "has_supporting_formal": true,
+      "has_hard_negative": false
+    }
+  },
+  {
+    "dzialka_id": "842b0a1e-7309-4c85-9d2c-bf2799411313",
+    "identyfikator": "240404201.827",
+    "province": "slaskie",
+    "label": "tempting_false_positive",
+    "expected_band": null,
+    "notes": "Seed candidate for manual validation/review.",
+    "source_hint": "planning_resolution: unknown (Studium uwarunkowań i kierunków zagospodarowania przestrzennego Gminy Kamienica Polska)",
+    "metrics": {
+      "overall_score": 45.0,
+      "future_signal_score": 25.0,
+      "cheapness_score": 20.0,
+      "price_per_m2_zl": 3.89,
+      "has_formal_geometry": false,
+      "has_supporting_formal": true,
+      "has_hard_negative": false
+    }
+  },
+  {
+    "dzialka_id": "112fc6ab-0ad7-4e2f-a5cb-b6fca81703e3",
+    "identyfikator": "121306202.277/12",
+    "province": "malopolskie",
+    "label": "tempting_false_positive",
+    "expected_band": null,
+    "notes": "Seed candidate for manual validation/review.",
+    "source_hint": "planning_resolution: unknown (POG 1213062)",
+    "metrics": {
+      "overall_score": 50.0,
+      "future_signal_score": 30.0,
+      "cheapness_score": 20.0,
+      "price_per_m2_zl": 4.02,
+      "has_formal_geometry": false,
+      "has_supporting_formal": true,
+      "has_hard_negative": false
+    }
+  },
+  {
+    "dzialka_id": "872435bf-9d50-49ca-9772-39a5f817e016",
+    "identyfikator": "240902501.2440",
+    "province": "slaskie",
+    "label": "tempting_false_positive",
+    "expected_band": null,
+    "notes": "Seed candidate for manual validation/review.",
+    "source_hint": "planning_resolution: unknown (Studium uwarunkowań i kierunków zagospodarowania przestrzennego gminy i miasta Koziegłowy)",
+    "metrics": {
+      "overall_score": 40.0,
+      "future_signal_score": 20.0,
+      "cheapness_score": 20.0,
+      "price_per_m2_zl": 1.43,
+      "has_formal_geometry": false,
+      "has_supporting_formal": true,
+      "has_hard_negative": false
+    }
+  },
+  {
+    "dzialka_id": "62e905cb-fd4f-4b2f-ad43-90ebab2a183c",
+    "identyfikator": "121809503.3827/1",
+    "province": "malopolskie",
+    "label": "tempting_false_positive",
+    "expected_band": null,
+    "notes": "Seed candidate for manual validation/review.",
+    "source_hint": "planning_resolution: unknown (w sprawie zmiany studium uwarunkowań i kierunków zagospodarowania przestrzennego gminy Wadowice)",
+    "metrics": {
+      "overall_score": 50.0,
+      "future_signal_score": 30.0,
+      "cheapness_score": 20.0,
+      "price_per_m2_zl": 25.27,
+      "has_formal_geometry": false,
+      "has_supporting_formal": true,
+      "has_hard_negative": false
+    }
+  },
+  {
+    "dzialka_id": "300e2317-a644-4521-8fec-e75f5d1b0c2b",
+    "identyfikator": "241608501.348",
+    "province": "slaskie",
+    "label": "tempting_false_positive",
+    "expected_band": null,
+    "notes": "Seed candidate for manual validation/review.",
+    "source_hint": "planning_resolution: unknown (w sprawie uchwalenia zmiany Studium uwarunkowań i kierunków zagospodarowania przestrzennego Miasta i Gminy Szczekociny)",
+    "metrics": {
+      "overall_score": 40.0,
+      "future_signal_score": 20.0,
+      "cheapness_score": 20.0,
+      "price_per_m2_zl": 4.32,
+      "has_formal_geometry": false,
+      "has_supporting_formal": true,
+      "has_hard_negative": false
+    }
+  },
+  {
+    "dzialka_id": "858b1225-b8f4-4d40-b283-d7b1e90739d6",
+    "identyfikator": "241608501.346",
+    "province": "slaskie",
+    "label": "tempting_false_positive",
+    "expected_band": null,
+    "notes": "Seed candidate for manual validation/review.",
+    "source_hint": "planning_resolution: unknown (w sprawie uchwalenia zmiany Studium uwarunkowań i kierunków zagospodarowania przestrzennego Miasta i Gminy Szczekociny)",
+    "metrics": {
+      "overall_score": 30.0,
+      "future_signal_score": 20.0,
+      "cheapness_score": 10.0,
+      "price_per_m2_zl": 5.23,
+      "has_formal_geometry": false,
+      "has_supporting_formal": true,
+      "has_hard_negative": false
+    }
+  },
+  {
+    "dzialka_id": "860d2cd7-ef86-4407-a132-806e1054b09a",
+    "identyfikator": "246601161.15/59",
+    "province": "slaskie",
+    "label": "tempting_false_positive",
+    "expected_band": null,
+    "notes": "Seed candidate for manual validation/review.",
+    "source_hint": "studium_zone: mixed_residential (Studium uwarunkowań i kierunków zagospodarowania przestrzennego miasta Gliwice)",
+    "metrics": {
+      "overall_score": 25.0,
+      "future_signal_score": 5.0,
+      "cheapness_score": 20.0,
+      "price_per_m2_zl": 2.27,
+      "has_formal_geometry": true,
+      "has_supporting_formal": false,
+      "has_hard_negative": true
+    }
+  },
+  {
+    "dzialka_id": "06dee26b-b14d-4e3f-9d6d-cb87c6806f11",
+    "identyfikator": "120507201.2695",
+    "province": "malopolskie",
+    "label": "tempting_false_positive",
+    "expected_band": null,
+    "notes": "Seed candidate for manual validation/review.",
+    "source_hint": null,
+    "metrics": {
+      "overall_score": 20.0,
+      "future_signal_score": 0.0,
+      "cheapness_score": 20.0,
+      "price_per_m2_zl": 3.26,
+      "has_formal_geometry": false,
+      "has_supporting_formal": false,
+      "has_hard_negative": false
+    }
+  },
+  {
+    "dzialka_id": "9c63855c-8141-4ac9-8b55-3d99b29c51dd",
+    "identyfikator": "246601161.15/58",
+    "province": "slaskie",
+    "label": "true_negative",
+    "expected_band": null,
+    "notes": "Seed candidate for manual validation/review.",
+    "source_hint": null,
+    "metrics": {
+      "overall_score": 0.0,
+      "future_signal_score": 0.0,
+      "cheapness_score": 0.0,
+      "price_per_m2_zl": 117.88,
+      "has_formal_geometry": false,
+      "has_supporting_formal": false,
+      "has_hard_negative": true
+    }
+  },
+  {
+    "dzialka_id": "c6d86412-e245-467e-a1b2-577074e4447c",
+    "identyfikator": "121701111.101/2",
+    "province": "malopolskie",
+    "label": "true_negative",
+    "expected_band": null,
+    "notes": "Seed candidate for manual validation/review.",
+    "source_hint": "studium_zone: residential (001)",
+    "metrics": {
+      "overall_score": 20.0,
+      "future_signal_score": 0.0,
+      "cheapness_score": 20.0,
+      "price_per_m2_zl": 3520.6,
+      "has_formal_geometry": true,
+      "has_supporting_formal": true,
+      "has_hard_negative": true
+    }
+  },
+  {
+    "dzialka_id": "860d2cd7-ef86-4407-a132-806e1054b09a",
+    "identyfikator": "246601161.15/59",
+    "province": "slaskie",
+    "label": "true_negative",
+    "expected_band": null,
+    "notes": "Seed candidate for manual validation/review.",
+    "source_hint": "studium_zone: mixed_residential (Studium uwarunkowań i kierunków zagospodarowania przestrzennego miasta Gliwice)",
+    "metrics": {
+      "overall_score": 25.0,
+      "future_signal_score": 5.0,
+      "cheapness_score": 20.0,
+      "price_per_m2_zl": 2.27,
+      "has_formal_geometry": true,
+      "has_supporting_formal": false,
+      "has_hard_negative": true
+    }
+  },
+  {
+    "dzialka_id": "e0871a86-b2c4-418b-b596-0cdfdcd45e2f",
+    "identyfikator": "121701111.106/2",
+    "province": "malopolskie",
+    "label": "true_negative",
+    "expected_band": null,
+    "notes": "Seed candidate for manual validation/review.",
+    "source_hint": "studium_zone: residential (001)",
+    "metrics": {
+      "overall_score": 48.0,
+      "future_signal_score": 28.0,
+      "cheapness_score": 20.0,
+      "price_per_m2_zl": 1904.54,
+      "has_formal_geometry": true,
+      "has_supporting_formal": true,
+      "has_hard_negative": true
+    }
+  },
+  {
+    "dzialka_id": "5eb4e465-f0e8-47a5-a30b-46e191dfbbc6",
+    "identyfikator": "240107508.54",
+    "province": "slaskie",
+    "label": "true_negative",
+    "expected_band": null,
+    "notes": "Seed candidate for manual validation/review.",
+    "source_hint": null,
+    "metrics": {
+      "overall_score": 0.0,
+      "future_signal_score": 0.0,
+      "cheapness_score": 0.0,
+      "price_per_m2_zl": 168.55,
+      "has_formal_geometry": false,
+      "has_supporting_formal": false,
+      "has_hard_negative": false
+    }
+  },
+  {
+    "dzialka_id": "99f7f87f-0964-4374-a7ba-8e39b65eedcd",
+    "identyfikator": "120102207.161/1",
+    "province": "malopolskie",
+    "label": "true_negative",
+    "expected_band": null,
+    "notes": "Seed candidate for manual validation/review.",
+    "source_hint": null,
+    "metrics": {
+      "overall_score": 0.0,
+      "future_signal_score": 0.0,
+      "cheapness_score": 0.0,
+      "price_per_m2_zl": 15.92,
+      "has_formal_geometry": false,
+      "has_supporting_formal": false,
+      "has_hard_negative": false
+    }
+  },
+  {
+    "dzialka_id": "0e718c90-c341-4665-8228-7031b084a4a6",
+    "identyfikator": "240305202.104/4",
+    "province": "slaskie",
+    "label": "true_negative",
+    "expected_band": null,
+    "notes": "Seed candidate for manual validation/review.",
+    "source_hint": null,
+    "metrics": {
+      "overall_score": 0.0,
+      "future_signal_score": 0.0,
+      "cheapness_score": 0.0,
+      "price_per_m2_zl": 202.69,
+      "has_formal_geometry": false,
+      "has_supporting_formal": false,
+      "has_hard_negative": false
+    }
+  },
+  {
+    "dzialka_id": "06edb723-5f6b-4422-971b-92edb91ab43d",
+    "identyfikator": "120303401.1155/17",
+    "province": "malopolskie",
+    "label": "true_negative",
+    "expected_band": null,
+    "notes": "Seed candidate for manual validation/review.",
+    "source_hint": null,
+    "metrics": {
+      "overall_score": 0.0,
+      "future_signal_score": 0.0,
+      "cheapness_score": 0.0,
+      "price_per_m2_zl": 39.96,
+      "has_formal_geometry": false,
+      "has_supporting_formal": false,
+      "has_hard_negative": false
+    }
+  },
+  {
+    "dzialka_id": "d133c9d0-2efe-48a7-bb60-87235fb9b752",
+    "identyfikator": "240305202.122/2",
+    "province": "slaskie",
+    "label": "true_negative",
+    "expected_band": null,
+    "notes": "Seed candidate for manual validation/review.",
+    "source_hint": null,
+    "metrics": {
+      "overall_score": 0.0,
+      "future_signal_score": 0.0,
+      "cheapness_score": 0.0,
+      "price_per_m2_zl": 42.25,
+      "has_formal_geometry": false,
+      "has_supporting_formal": false,
+      "has_hard_negative": false
+    }
+  },
+  {
+    "dzialka_id": "4a723101-011e-47ff-a63e-20bcd393317b",
+    "identyfikator": "120602208.492/2",
+    "province": "malopolskie",
+    "label": "true_negative",
+    "expected_band": null,
+    "notes": "Seed candidate for manual validation/review.",
+    "source_hint": null,
+    "metrics": {
+      "overall_score": 0.0,
+      "future_signal_score": 0.0,
+      "cheapness_score": 0.0,
+      "price_per_m2_zl": 595.83,
+      "has_formal_geometry": false,
+      "has_supporting_formal": false,
+      "has_hard_negative": false
+    }
+  }
+]

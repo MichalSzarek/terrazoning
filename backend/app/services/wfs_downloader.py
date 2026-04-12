@@ -23,8 +23,11 @@ Supported WFS output formats:
     1. GeoJSON  (OUTPUTFORMAT=application/json) — primary
     2. GML 3.x  (WFS default)                  — fallback via lxml
 
-Polish national MPZP base URL (Krajowa Integracja MPZP):
-    https://integracja.gugik.gov.pl/cgi-bin/KrajowaIntegracjaUzytkowaniaTerenu
+WFS source status (2025):
+    The old national WFS (integracja.gugik.gov.pl) is permanently offline.
+    GUGiK now provides only a WMS aggregation (mapy.geoportal.gov.pl/wss/ext/
+    KrajowaIntegracjaMiejscowychPlanowZagospodarowaniaPrzestrzennego) — visualization only.
+    For actual polygon data use municipality-level WFS services or seed_test_zones.py for testing.
 
 Note: WFS layers, property names, and CRS vary by municipality.
 Use WFSFieldMapping to adapt to a specific service.
@@ -33,6 +36,7 @@ Use WFSFieldMapping to adapt to a specific service.
 from __future__ import annotations
 
 import logging
+import re
 from dataclasses import dataclass, field
 from datetime import date, datetime, timezone
 from typing import Any, Optional
@@ -51,6 +55,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.gold import PlanningZone
 
 logger = logging.getLogger(__name__)
+
+_INVALID_XML_CHAR_RE = re.compile(
+    r"[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]"
+)
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -178,6 +186,9 @@ class WFSClient:
         bbox_2180: Optional[tuple[float, float, float, float]] = None,
         field_mapping: Optional[WFSFieldMapping] = None,
         cql_filter: Optional[str] = None,
+        wfs_version: str = "2.0.0",
+        prefer_json: bool = True,
+        swap_xy: bool = False,
     ) -> list[WFSFeature]:
         """Fetch WFS features and return them reprojected to EPSG:2180.
 
@@ -197,11 +208,14 @@ class WFSClient:
         assert self._http is not None, "Use WFSClient as async context manager"
 
         mapping = field_mapping or WFSFieldMapping()
-        params = self._build_request_params(layer_name, bbox_2180, source_srid, cql_filter)
+        params = self._build_request_params(
+            layer_name, bbox_2180, source_srid, cql_filter,
+            wfs_version=wfs_version, prefer_json=prefer_json,
+        )
 
         logger.info(
-            "[WFS] Fetching layer=%s teryt=%s from %s (srid=%d)",
-            layer_name, teryt_gmina, wfs_url, source_srid,
+            "[WFS] Fetching layer=%s teryt=%s from %s (srid=%d wfs=%s json=%s)",
+            layer_name, teryt_gmina, wfs_url, source_srid, wfs_version, prefer_json,
         )
 
         try:
@@ -227,6 +241,7 @@ class WFSClient:
             parsed = self._parse_feature(
                 raw, plan_type=plan_type, teryt_gmina=teryt_gmina,
                 source_srid=source_srid, mapping=mapping, wfs_url=wfs_url,
+                swap_xy=swap_xy,
             )
             if parsed is not None:
                 features.append(parsed)
@@ -258,6 +273,8 @@ class WFSClient:
 
         for feat in features:
             geom_wkb = from_shape(feat.geom, srid=2180)
+            c = feat.geom.centroid
+            geom_hash = f"{round(c.x)}_{round(c.y)}"
 
             try:
                 stmt = (
@@ -270,13 +287,14 @@ class WFSClient:
                         przeznaczenie=feat.przeznaczenie,
                         przeznaczenie_opis=feat.przeznaczenie_opis,
                         geom=geom_wkb,
+                        geom_hash=geom_hash,
                         source_wfs_url=feat.source_wfs_url,
                         ingested_at=datetime.now(timezone.utc),
                         plan_effective_date=feat.plan_effective_date,
                     )
-                    # Upsert key: same zone same source → refresh geometry
+                    # Upsert key: same source + same gmina + same designation + same location
                     .on_conflict_do_update(
-                        constraint="uq_planning_zones_source_zone",
+                        constraint="uq_planning_zones_spatial_key",
                         set_={
                             "geom": geom_wkb,
                             "plan_name": feat.plan_name,
@@ -315,6 +333,9 @@ class WFSClient:
         bbox_2180: Optional[tuple[float, float, float, float]] = None,
         field_mapping: Optional[WFSFieldMapping] = None,
         cql_filter: Optional[str] = None,
+        wfs_version: str = "2.0.0",
+        prefer_json: bool = True,
+        swap_xy: bool = False,
     ) -> WFSIngestReport:
         """Convenience method: fetch features then ingest them, return full report."""
         import asyncio as _asyncio
@@ -335,6 +356,9 @@ class WFSClient:
             bbox_2180=bbox_2180,
             field_mapping=field_mapping,
             cql_filter=cql_filter,
+            wfs_version=wfs_version,
+            prefer_json=prefer_json,
+            swap_xy=swap_xy,
         )
         report.features_fetched = len(features)
 
@@ -355,6 +379,118 @@ class WFSClient:
         )
         return report
 
+    async def fetch_by_bbox_tiles(
+        self,
+        wfs_url: str,
+        layer_name: str,
+        plan_type: str,
+        teryt_gmina: str,
+        bbox_2180: tuple[float, float, float, float],
+        *,
+        tile_size_m: float = 10_000.0,
+        source_srid: int = 2180,
+        field_mapping: Optional[WFSFieldMapping] = None,
+        cql_filter: Optional[str] = None,
+        max_concurrent: int = 4,
+    ) -> list[WFSFeature]:
+        """Split a large bbox into tiles and fetch each tile independently.
+
+        Solves the WFS national bottleneck (Red Flag 3): a single GetFeature request
+        covering a whole gmina can time out or hit the WFS server's feature cap.
+        Tiling keeps every request to roughly one obręb-sized area (≤ 10 km × 10 km),
+        well within WFS server time limits and the _WFS_MAX_FEATURES cap.
+
+        Tiles are fetched concurrently (up to max_concurrent at a time — be polite
+        to public GUGiK / municipal WFS servers).
+
+        Border-touching features (same geometry returned by two adjacent tiles) are
+        deduplicated using centroid coordinates rounded to 1 m — sufficient precision
+        for planning zone polygons whose centroids are never within 1 m of each other.
+
+        Args:
+            bbox_2180:      (xmin, ymin, xmax, ymax) in EPSG:2180 covering the gmina.
+            tile_size_m:    Side length of each square tile in metres (default 10 km).
+            max_concurrent: Max simultaneous HTTP requests (default 4).
+
+        Returns:
+            Deduplicated list of WFSFeature instances in EPSG:2180.
+        """
+        import asyncio as _asyncio
+        import math
+
+        assert self._http is not None, "Use WFSClient as async context manager"
+
+        xmin, ymin, xmax, ymax = bbox_2180
+        x_count = max(1, math.ceil((xmax - xmin) / tile_size_m))
+        y_count = max(1, math.ceil((ymax - ymin) / tile_size_m))
+        total_tiles = x_count * y_count
+
+        logger.info(
+            "[WFS] Tiled fetch: bbox=(%.0f,%.0f→%.0f,%.0f) tile=%.0fm "
+            "grid=%dx%d=%d layer=%s teryt=%s",
+            xmin, ymin, xmax, ymax, tile_size_m,
+            x_count, y_count, total_tiles, layer_name, teryt_gmina,
+        )
+
+        # Build tile bounding boxes (no overlap — adjacent tiles share an edge,
+        # not a band, so border features appear in at most two tiles)
+        tiles: list[tuple[float, float, float, float]] = []
+        for xi in range(x_count):
+            for yi in range(y_count):
+                tx_min = xmin + xi * tile_size_m
+                ty_min = ymin + yi * tile_size_m
+                tx_max = min(xmin + (xi + 1) * tile_size_m, xmax)
+                ty_max = min(ymin + (yi + 1) * tile_size_m, ymax)
+                tiles.append((tx_min, ty_min, tx_max, ty_max))
+
+        semaphore = _asyncio.Semaphore(max_concurrent)
+
+        async def _fetch_one(tile_bbox: tuple[float, float, float, float]) -> list[WFSFeature]:
+            async with semaphore:
+                try:
+                    return await self.fetch_features(
+                        wfs_url=wfs_url,
+                        layer_name=layer_name,
+                        plan_type=plan_type,
+                        teryt_gmina=teryt_gmina,
+                        source_srid=source_srid,
+                        bbox_2180=tile_bbox,
+                        field_mapping=field_mapping,
+                        cql_filter=cql_filter,
+                    )
+                except Exception as exc:
+                    logger.warning(
+                        "[WFS] Tile (%.0f,%.0f,%.0f,%.0f) failed: %s — skipping tile",
+                        *tile_bbox, exc,
+                    )
+                    return []
+
+        tile_results = await _asyncio.gather(*[_fetch_one(t) for t in tiles])
+
+        # Deduplicate border-touching features.
+        # Key: (centroid_x rounded to 1 m, centroid_y rounded to 1 m, przeznaczenie)
+        # Planning zone polygons in Poland are never ≤ 1 m apart in centroid space,
+        # so this uniquely identifies each feature without WKB comparison overhead.
+        seen: set[tuple[int, int, str]] = set()
+        merged: list[WFSFeature] = []
+        total_raw = sum(len(r) for r in tile_results)
+        for tile_feats in tile_results:
+            for feat in tile_feats:
+                c = feat.geom.centroid
+                key = (round(c.x), round(c.y), feat.przeznaczenie)
+                if key not in seen:
+                    seen.add(key)
+                    merged.append(feat)
+
+        duplicates_removed = total_raw - len(merged)
+        logger.info(
+            "[WFS] Tiled merge complete: raw=%d unique=%d border_dupes_removed=%d "
+            "tiles_ok=%d/%d",
+            total_raw, len(merged), duplicates_removed,
+            sum(1 for r in tile_results if r), total_tiles,
+        )
+        return merged
+
     # ------------------------------------------------------------------
     # Private helpers
     # ------------------------------------------------------------------
@@ -365,16 +501,22 @@ class WFSClient:
         bbox_2180: Optional[tuple[float, float, float, float]],
         source_srid: int,
         cql_filter: Optional[str],
+        wfs_version: str = "2.0.0",
+        prefer_json: bool = True,
     ) -> dict[str, str]:
+        is_v2 = wfs_version.startswith("2.")
         params: dict[str, str] = {
             "SERVICE": "WFS",
-            "VERSION": "2.0.0",
+            "VERSION": wfs_version,
             "REQUEST": "GetFeature",
-            "TYPENAMES": layer_name,
-            "OUTPUTFORMAT": "application/json",
-            "COUNT": str(self._max_features),
+            # WFS 2.0.0 → TYPENAMES, WFS 1.x → TYPENAME
+            ("TYPENAMES" if is_v2 else "TYPENAME"): layer_name,
+            # WFS 2.0.0 → COUNT, WFS 1.x → MAXFEATURES
+            ("COUNT" if is_v2 else "MAXFEATURES"): str(self._max_features),
             "SRSNAME": f"urn:ogc:def:crs:EPSG::{source_srid}",
         }
+        if prefer_json:
+            params["OUTPUTFORMAT"] = "application/json"
         if bbox_2180 is not None:
             xmin, ymin, xmax, ymax = bbox_2180
             params["BBOX"] = (
@@ -402,11 +544,10 @@ class WFSClient:
         return fc.get("features", [])
 
     def _parse_gml_response(self, body: str) -> list[dict[str, Any]]:
-        """Minimal GML 3.x fallback parser.
+        """Parse WFS GML 3.x response into pseudo-GeoJSON feature list.
 
-        Returns a list of pseudo-GeoJSON feature dicts for uniform processing.
-        Only handles simple property extraction — complex GML should use a dedicated
-        OGR-based approach.
+        Handles both WFS 2.0.0 (GML 3.2) and WFS 1.1.0 (GML 3.1.1) responses,
+        including ArcGIS Server WFS output. Does NOT require OGR/GDAL.
         """
         try:
             from lxml import etree
@@ -414,52 +555,95 @@ class WFSClient:
             logger.error("[WFS] lxml not installed — cannot parse GML responses")
             return []
 
-        ns = {
-            "wfs": "http://www.opengis.net/wfs/2.0",
-            "gml": "http://www.opengis.net/gml/3.2",
-        }
-
         try:
             root = etree.fromstring(body.encode())
         except etree.XMLSyntaxError as exc:
-            logger.error("[WFS] GML parse error: %s", exc)
+            sanitized_body = _INVALID_XML_CHAR_RE.sub("", body)
+            if sanitized_body != body:
+                logger.warning(
+                    "[WFS] GML XML parse error; retrying after stripping invalid control chars: %s",
+                    exc,
+                )
+                try:
+                    root = etree.fromstring(sanitized_body.encode())
+                except etree.XMLSyntaxError as sanitized_exc:
+                    logger.error("[WFS] GML XML parse error after sanitization: %s", sanitized_exc)
+                    return []
+            else:
+                logger.error("[WFS] GML XML parse error: %s", exc)
+                return []
+
+        # Check for OGC exception response
+        root_local = root.tag.split("}")[-1] if "}" in root.tag else root.tag
+        if root_local == "ExceptionReport":
+            exc_els = root.findall(".//{http://www.opengis.net/ows/1.1}ExceptionText")
+            if not exc_els:
+                exc_els = root.findall(".//{http://www.opengis.net/ows}ExceptionText")
+            msg = exc_els[0].text.strip() if exc_els else body[:300]
+            logger.error("[WFS] OGC ExceptionReport: %s", msg)
             return []
 
-        features: list[dict[str, Any]] = []
-        for member in root.iter("{http://www.opengis.net/wfs/2.0}member"):
-            feature_el = next(iter(member), None)
-            if feature_el is None:
-                continue
+        _GML_NS = [
+            "http://www.opengis.net/gml/3.2",
+            "http://www.opengis.net/gml",
+        ]
+        _MEMBER_TAGS = [
+            "{http://www.opengis.net/wfs/2.0}member",
+            "{http://www.opengis.net/wfs}member",
+            "{http://www.opengis.net/wfs}featureMember",
+            "{http://www.opengis.net/gml/3.2}featureMember",
+            "{http://www.opengis.net/gml}featureMember",
+        ]
 
+        members: list = []
+        for tag in _MEMBER_TAGS:
+            members = root.findall(tag)
+            if members:
+                break
+        if not members:
+            # ArcGIS sometimes wraps in featureMembers (plural)
+            for tag in [
+                "{http://www.opengis.net/wfs/2.0}members",
+                "{http://www.opengis.net/wfs}featureMembers",
+            ]:
+                container = root.find(tag)
+                if container is not None:
+                    members = list(container)
+                    break
+        if not members:
+            # Last resort: direct non-bounding children
+            members = [
+                c for c in root
+                if not (c.tag.split("}")[-1] if "}" in c.tag else c.tag)
+                .startswith("boundedBy")
+            ]
+
+        features: list[dict[str, Any]] = []
+        for member in members:
+            feature_el = member[0] if len(member) else member
             props: dict[str, Any] = {}
-            geom_el = None
+            geom_shapely = None
 
             for child in feature_el:
                 local = child.tag.split("}")[-1] if "}" in child.tag else child.tag
-                # Detect geometry child (contains gml:MultiSurface or similar)
-                if child.find(".//{http://www.opengis.net/gml/3.2}posList") is not None:
-                    geom_el = child
-                elif child.text:
+                geom = _try_parse_gml_geometry(child, _GML_NS)
+                if geom is not None:
+                    geom_shapely = geom
+                    continue
+                if child.text and child.text.strip():
                     props[local] = child.text.strip()
 
-            if geom_el is None:
+            if geom_shapely is None:
                 continue
 
-            # Convert GML geometry to WKT via shapely/lxml (best-effort)
-            try:
-                from shapely import from_wkt
-                gml_text = etree.tostring(geom_el, encoding="unicode")
-                # Minimal GML to Shapely via OGR — requires gdal/ogr Python bindings
-                # Fallback: skip if conversion fails
-                logger.debug("[WFS] GML geometry conversion skipped (no OGR bindings)")
-                continue  # without OGR, skip GML geometries
-            except Exception:
-                continue
+            from shapely.geometry import mapping as _sm
+            features.append({
+                "type": "Feature",
+                "properties": props,
+                "geometry": _sm(geom_shapely),
+            })
 
-        logger.warning(
-            "[WFS] GML parsing returned %d features (GeoJSON preferred for full support)",
-            len(features),
-        )
+        logger.info("[WFS] GML parsing extracted %d features", len(features))
         return features
 
     def _parse_feature(
@@ -470,6 +654,7 @@ class WFSClient:
         source_srid: int,
         mapping: WFSFieldMapping,
         wfs_url: str,
+        swap_xy: bool = False,
     ) -> Optional[WFSFeature]:
         """Parse one raw GeoJSON feature into a WFSFeature.
 
@@ -504,7 +689,7 @@ class WFSClient:
         # Reproject to EPSG:2180 if source is different
         if source_srid != 2180:
             try:
-                geom = _reproject_to_2180(geom, source_srid)
+                geom = _reproject_to_2180(geom, source_srid, swap_xy=swap_xy)
             except Exception as exc:
                 logger.warning(
                     "[WFS] Reprojection from EPSG:%d to 2180 failed: %s",
@@ -557,11 +742,132 @@ class WFSClient:
 
 
 # ---------------------------------------------------------------------------
+# GML geometry parsing helpers (no OGR/GDAL required)
+# ---------------------------------------------------------------------------
+
+def _try_parse_gml_geometry(
+    element: Any,
+    gml_namespaces: list[str],
+) -> Optional[BaseGeometry]:
+    """Attempt to parse a GML geometry element to Shapely. Returns None if not a geometry."""
+    from shapely.geometry import MultiPolygon
+    for gml_ns in gml_namespaces:
+        polys = _collect_gml_polygons(element, gml_ns)
+        if polys:
+            return polys[0] if len(polys) == 1 else MultiPolygon(polys)
+    return None
+
+
+def _collect_gml_polygons(element: Any, gml_ns: str) -> list[Any]:
+    """Recursively collect Shapely Polygon objects from a GML element."""
+    from shapely.geometry import Polygon
+
+    polys: list[Any] = []
+    local = element.tag.split("}")[-1] if "}" in element.tag else element.tag
+
+    if local == "Polygon":
+        p = _parse_gml_polygon(element, gml_ns)
+        if p:
+            polys.append(p)
+        return polys
+
+    if local in ("MultiSurface", "MultiPolygon", "Surface"):
+        from lxml import etree  # already validated to be installed
+        for poly_el in element.iter(f"{{{gml_ns}}}Polygon"):
+            p = _parse_gml_polygon(poly_el, gml_ns)
+            if p:
+                polys.append(p)
+        return polys
+
+    # Recurse into children that share the same GML namespace
+    for child in element:
+        child_ns = (
+            child.tag.split("}")[0].lstrip("{") if "}" in child.tag else ""
+        )
+        if child_ns == gml_ns:
+            polys.extend(_collect_gml_polygons(child, gml_ns))
+
+    return polys
+
+
+def _parse_gml_polygon(element: Any, gml_ns: str) -> Optional[Any]:
+    """Parse a single gml:Polygon element into a Shapely Polygon."""
+    from shapely.geometry import Polygon
+
+    exterior: list[tuple[float, float]] = []
+    holes: list[list[tuple[float, float]]] = []
+
+    for child in element:
+        local = child.tag.split("}")[-1] if "}" in child.tag else child.tag
+        # NOTE: do NOT use `or` on lxml elements — truth-testing of elements
+        # is unreliable (FutureWarning: text-only elements evaluate as False).
+        pos_list = child.find(f".//{{{gml_ns}}}posList")
+        if pos_list is None:
+            pos_list = child.find(f".//{{{gml_ns}}}coordinates")
+        if pos_list is None or not pos_list.text:
+            continue
+        coords = _parse_pos_list(
+            pos_list.text,
+            dimension=_infer_gml_coordinate_dimension(pos_list, child, element),
+        )
+        if local in ("exterior", "outerBoundaryIs"):
+            exterior = coords
+        elif local in ("interior", "innerBoundaryIs"):
+            holes.append(coords)
+
+    if len(exterior) < 3:
+        return None
+    try:
+        return Polygon(exterior, holes)
+    except Exception as exc:
+        logger.debug("[WFS] GML Polygon creation failed: %s", exc)
+        return None
+
+
+def _infer_gml_coordinate_dimension(*elements: Any) -> int:
+    """Infer GML coordinate tuple size from srsDimension / dimension attributes."""
+    for element in elements:
+        if element is None:
+            continue
+        for attr_name in ("srsDimension", "dimension"):
+            value = getattr(element, "get", lambda *_: None)(attr_name)
+            if value and str(value).isdigit():
+                dimension = int(value)
+                if dimension >= 2:
+                    return dimension
+    return 2
+
+
+def _parse_pos_list(text: str, dimension: int = 2) -> list[tuple[float, float]]:
+    """Parse GML coordinate string and project any 3D tuples down to (x, y)."""
+    try:
+        nums = list(map(float, text.split()))
+    except ValueError:
+        return []
+    if dimension < 2:
+        dimension = 2
+    return [
+        (nums[i], nums[i + 1])
+        for i in range(0, len(nums) - (dimension - 1), dimension)
+        if i + 1 < len(nums)
+    ]
+
+
+# ---------------------------------------------------------------------------
 # Utility functions
 # ---------------------------------------------------------------------------
 
-def _reproject_to_2180(geom: BaseGeometry, source_srid: int) -> BaseGeometry:
-    """Reproject a Shapely geometry from source_srid to EPSG:2180."""
+def _reproject_to_2180(
+    geom: BaseGeometry, source_srid: int, swap_xy: bool = False
+) -> BaseGeometry:
+    """Reproject a Shapely geometry from source_srid to EPSG:2180.
+
+    swap_xy=True: swap (x, y) before reprojection — needed when the WFS server
+    returns coordinates in standard EPSG axis order (Northing, Easting) for
+    projected CRS, while always_xy=True expects (Easting, Northing).
+    """
+    if swap_xy:
+        geom = shapely_transform(lambda x, y, *args: (y, x), geom)
     transformer = Transformer.from_crs(
         f"EPSG:{source_srid}", "EPSG:2180", always_xy=True
     )
@@ -595,7 +901,7 @@ def _parse_date(value: Optional[str]) -> Optional[date]:
     """Try common date formats for WFS date fields."""
     if not value:
         return None
-    for fmt in ("%Y-%m-%d", "%d.%m.%Y", "%Y/%m/%d", "%d-%m-%Y"):
+    for fmt in ("%Y-%m-%d", "%Y-%m-%dT%H:%M:%S", "%d.%m.%Y", "%Y/%m/%d", "%d-%m-%Y"):
         try:
             return datetime.strptime(value, fmt).date()
         except ValueError:
@@ -615,6 +921,10 @@ async def run_wfs_ingest(
     teryt_gmina: str,
     source_srid: int = 2180,
     cql_filter: Optional[str] = None,
+    field_mapping: Optional[WFSFieldMapping] = None,
+    wfs_version: str = "2.0.0",
+    prefer_json: bool = True,
+    swap_xy: bool = False,
 ) -> WFSIngestReport:
     """Run a single WFS ingestion cycle — usable from Cloud Run Jobs or CLI."""
     from app.core.database import AsyncSessionLocal
@@ -629,6 +939,10 @@ async def run_wfs_ingest(
                 teryt_gmina=teryt_gmina,
                 source_srid=source_srid,
                 cql_filter=cql_filter,
+                field_mapping=field_mapping,
+                wfs_version=wfs_version,
+                prefer_json=prefer_json,
+                swap_xy=swap_xy,
             )
 
 

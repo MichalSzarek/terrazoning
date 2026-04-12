@@ -46,13 +46,24 @@ For production, configure your reverse proxy (nginx / Cloud Run / Vercel) to rou
 
 ## Map tile style
 
-The default map style uses **MapLibre demo tiles** (`demotiles.maplibre.org`) — free, no API key.
+The frontend now defaults to **OpenFreeMap Liberty**:
 
-For better basemap quality in production, set a MapTiler or Stadia Maps style URL in
-`src/components/map/LeadsMap.tsx`:
+```txt
+https://tiles.openfreemap.org/styles/liberty
+```
 
-```ts
-const MAP_STYLE = 'https://api.maptiler.com/maps/dataviz-dark/style.json?key=YOUR_KEY';
+This gives a cleaner production-ready basemap than the old MapLibre demo tiles and needs no API key.
+
+If you want to use your own hosted style, MapTiler, Stadia, or another MapLibre-compatible style, set:
+
+```bash
+VITE_MAP_STYLE_URL=https://your-style-endpoint.example/style.json
+```
+
+Example:
+
+```bash
+VITE_MAP_STYLE_URL=https://api.maptiler.com/maps/dataviz-dark/style.json?key=YOUR_KEY
 ```
 
 ## Features

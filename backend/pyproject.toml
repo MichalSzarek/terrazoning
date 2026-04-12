@@ -8,23 +8,23 @@ dependencies = [
     # Web framework
     "fastapi[standard]>=0.115.0",
     "uvicorn[standard]>=0.32.0",
-
     # Database — async SQLAlchemy + PostGIS
     "sqlalchemy[asyncio]>=2.0.36",
     "alembic>=1.14.0",
-    "asyncpg>=0.30.0",        # async driver for SQLAlchemy
+    "asyncpg>=0.30.0", # async driver for SQLAlchemy
     "psycopg2-binary>=2.9.10", # sync driver (for Alembic offline mode)
-    "geoalchemy2>=0.16.0",    # CRITICAL: PostGIS GEOMETRY column support
-    "shapely>=2.0.6",         # geometry manipulation (ST_MakeValid, area checks)
-
+    "geoalchemy2>=0.16.0", # CRITICAL: PostGIS GEOMETRY column support
+    "shapely>=2.0.6", # geometry manipulation (ST_MakeValid, area checks)
     # Config & validation
     "pydantic>=2.10.0",
     "pydantic-settings>=2.7.0",
-
     # HTTP client (for ULDK API calls)
     "httpx>=0.28.0",
-    "pyproj>=3.6.0",            # CRS reprojection (WFS sources often deliver EPSG:4326)
-    "lxml>=5.3.0",              # GML parsing fallback for WFS responses
+    "pyproj>=3.6.0", # CRS reprojection (WFS sources often deliver EPSG:4326)
+    "lxml>=5.3.0", # GML parsing fallback for WFS responses
+    "pypdf>=5.4.0",
+    "tifffile>=2026.3.3",
+    "pillow>=12.2.0",
 ]
 
 [dependency-groups]

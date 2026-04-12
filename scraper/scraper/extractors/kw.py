@@ -33,8 +33,11 @@ KNOWN_COURT_CODES: frozenset[str] = frozenset(
         # Mazowieckie
         "WA1M", "WA2M", "WA3M", "WA4M", "WA5M",
         "WA1W", "WA2W",  # Warszawa Wola, etc.
-        # Małopolskie
-        "KR1K", "KR2K", "KR1P", "KR1S",
+        # Małopolskie (extended for live-fire test)
+        "KR1K", "KR2K", "KR1P", "KR1S", "KR1W", "KR1Y", "KR1E",  # Kraków region
+        "NS1S", "NS1N",                                             # Nowy Sącz
+        "TR1T", "TR1N",                                             # Tarnów
+        "BB1O",                                                     # Oświęcim
         # Wielkopolskie
         "PO1P", "PO2P", "PO1N",
         # Pomorskie
@@ -43,8 +46,14 @@ KNOWN_COURT_CODES: frozenset[str] = frozenset(
         "WR1K", "WR1F", "WR1W",
         # Łódź
         "LD2K", "LD1G", "LD1Z",
-        # Śląskie
-        "GL1K", "GL1G", "KA1K",
+        # Śląskie (extended for live-fire test)
+        "GL1K", "GL1G", "GL1Z", "GL1B", "GL1C", "GL1R", "GL1T",  # Gliwice district courts
+        "KA1K", "KA1C", "KA1L",                                    # Katowice
+        "CZ1C", "CZ1O",                                             # Częstochowa
+        "BB1B", "BB1Z",                                             # Bielsko-Biała
+        "SO1S", "SO1M",                                             # Sosnowiec
+        "BY1K",                                                     # Będzin
+        "WZ1K",                                                     # Wodzisław Śląski
         # Lubelskie
         "LU1I",
         # Zachodniopomorskie

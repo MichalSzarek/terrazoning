@@ -3,7 +3,13 @@
 from app.models.base import Base  # noqa: F401
 from app.models.bronze import RawDocument, RawListing, ScrapeRun  # noqa: F401
 from app.models.silver import DlqParcel, Dzialka, KsiegaWieczysta, ListingParcel  # noqa: F401
-from app.models.gold import DeltaResult, InvestmentLead, PlanningZone  # noqa: F401
+from app.models.gold import (  # noqa: F401
+    DeltaResult,
+    FutureBuildabilityAssessment,
+    InvestmentLead,
+    PlanningSignal,
+    PlanningZone,
+)
 
 __all__ = [
     "Base",
@@ -18,6 +24,8 @@ __all__ = [
     "DlqParcel",
     # Gold
     "PlanningZone",
+    "PlanningSignal",
     "DeltaResult",
+    "FutureBuildabilityAssessment",
     "InvestmentLead",
 ]

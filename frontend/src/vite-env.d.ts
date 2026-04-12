@@ -1,0 +1,10 @@
+/// <reference types="vite/client" />
+
+interface ImportMetaEnv {
+  readonly VITE_FUTURE_BUILDABILITY_ENABLED?: string;
+  readonly VITE_MAP_STYLE_URL?: string;
+}
+
+interface ImportMeta {
+  readonly env: ImportMetaEnv;
+}

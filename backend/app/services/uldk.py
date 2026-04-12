@@ -18,6 +18,15 @@ Response format (semicolon-delimited CSV):
 
 Throttling reality: GUGiK enforces ~2-3 req/s; 429 responses are common during
 peak hours (9-16 weekdays). Exponential backoff is mandatory, not optional.
+
+CONFIRMED WORKING ENDPOINTS (verified via curl, April 2026):
+  GetParcelById  — resolves by full TERYT parcel ID (commune.region.parcel)
+  GetParcelByXY  — resolves by X,Y coordinates in EPSG:2180
+
+CONFIRMED DEAD ENDPOINTS (return "niepoprawny parametr …"):
+  GetParcelByKW  — does NOT exist. Any request returns the error string
+                   "niepoprawny parametr GetParcelByKW" as plain text.
+                   Do NOT use this. KW → parcel requires ekw.ms.gov.pl first.
 """
 
 from __future__ import annotations
@@ -53,12 +62,13 @@ _POLAND_YMIN, _POLAND_YMAX = 100_000.0, 800_000.0
 # Sliver threshold: polygons < 0.5 m² from spatial ops are artefacts (Commandment #3)
 _SLIVER_AREA_M2 = 0.5
 
-# Result fields requested from ULDK — WKB geometry + full TERYT breakdown
-_RESULT_FIELDS = "id,voivodeship,county,commune,region,parcel,geom_wkb"
+# GetParcelById result fields — full TERYT breakdown + geometry
+_RESULT_FIELDS_ID = "id,voivodeship,county,commune,region,parcel,geom_wkb"
+_RESULT_FIELDS_REGION = "id,voivodeship,county,commune,region"
 
 # ULDK API parameters
-_PARAMS_KW = "GetParcelByKW"
 _PARAMS_ID = "GetParcelById"
+_PARAMS_ID_OR_NR = "GetParcelByIdOrNr"
 
 # HTTP timeouts (seconds)
 _CONNECT_TIMEOUT = 5.0
@@ -74,11 +84,31 @@ class ULDKError(Exception):
 
 
 class ULDKNotFoundError(ULDKError):
-    """Parcel not found in ULDK registry."""
+    """Parcel not found in ULDK registry (transient — may succeed on retry)."""
+
+
+class ULDKGeometryMissingError(ULDKNotFoundError):
+    """KW is valid but GUGiK has no geometry for this parcel (permanent).
+
+    Root cause: ~15-20% of Polish Księgi Wieczyste are not yet spatialised —
+    the powiat cadastre hasn't uploaded the vector yet. Retrying will always
+    fail. Mark as resolution_status='geometry_missing' and remove from DLQ.
+
+    Human action required: check geoportal.gov.pl or powiat's own WMS/WFS.
+    """
 
 
 class ULDKAPIError(ULDKError):
     """ULDK returned a non-zero status code or an HTTP error."""
+
+
+class ULDKTransientError(ULDKAPIError):
+    """ULDK transport/rate-limit failure after retries.
+
+    This is different from parcel-not-found and should generally be treated as a
+    short-circuit condition for the current listing, not as a signal to keep
+    probing more parcel candidates from the same source text.
+    """
 
 
 class GeometryValidationError(ULDKError):
@@ -131,6 +161,20 @@ class ULDKResponse:
     status_code: int
     parcels: list[dict]    # list of field-dict from CSV rows
     raw_text: str          # preserved for Evidence Chain
+
+
+@dataclass
+class ULDKRegion:
+    """One cadastral region (obręb) returned by the PRG endpoints."""
+
+    identifier: str         # e.g. '246601_1.0021'
+    commune_id: str         # e.g. '246601_1'
+    commune_code: str       # e.g. '2466011'
+    region_code: str        # e.g. '0021'
+    region_name: str        # e.g. 'Centrum'
+    voivodeship: str
+    county: str
+    commune_name: str
 
 
 # ---------------------------------------------------------------------------
@@ -288,23 +332,31 @@ class ULDKClient:
     # Public resolution methods
     # ------------------------------------------------------------------
 
-    async def resolve_parcel_by_kw(self, kw: str) -> list[ULDKParcel]:
-        """Resolve all parcels linked to a Księga Wieczysta number.
+    async def resolve_parcel_by_nr(
+        self,
+        region_name: str,
+        parcel_nr: str,
+    ) -> list[ULDKParcel]:
+        """Search by obreb (region) name + parcel number without commune code.
 
-        A single KW can cover multiple działki — this returns ALL of them.
-        The KW must be in canonical form: CCCC/NNNNNNNN/D.
+        Calls GetParcelByIdOrNr with '{region_name} {parcel_nr}' format,
+        e.g. 'Szklary 28/2'.
 
-        ULDK call: ?request=GetParcelByKW&kw={kw}&srid=2180&result=...
+        Response line 0 = count of found parcels (NOT a status code).
+        Returns empty list if not found.
+        May return multiple parcels when the obreb name is not unique —
+        caller should disambiguate by province/commune.
         """
+        search_str = f"{region_name} {parcel_nr}"
         raw = await self._request({
-            "request": _PARAMS_KW,
-            "kw": kw,
+            "request": _PARAMS_ID_OR_NR,
+            "id": search_str,
             "srid": str(CANONICAL_SRID),
-            "result": _RESULT_FIELDS,
+            "result": _RESULT_FIELDS_ID,
         })
-        parsed = self._parse_uldk_response(raw, context=f"KW={kw}")
+        parsed = self._parse_id_or_nr_response(raw, context=f"nr={search_str!r}")
         logger.info(
-            "[ULDK] GetParcelByKW kw=%s → %d row(s)", kw, len(parsed.parcels)
+            "[ULDK] GetParcelByIdOrNr nr=%r → %d row(s)", search_str, len(parsed.parcels)
         )
         return self._build_parcels(parsed)
 
@@ -319,7 +371,7 @@ class ULDKClient:
             "request": _PARAMS_ID,
             "id": parcel_id,
             "srid": str(CANONICAL_SRID),
-            "result": _RESULT_FIELDS,
+            "result": _RESULT_FIELDS_ID,
         })
         parsed = self._parse_uldk_response(raw, context=f"id={parcel_id}")
         logger.info(
@@ -327,6 +379,37 @@ class ULDKClient:
         )
         parcels = self._build_parcels(parsed)
         return parcels[0] if parcels else None
+
+    async def list_regions_for_commune(self, commune_code: str) -> list[ULDKRegion]:
+        """Return all cadastral regions for a 7-digit commune TERYT code."""
+        lookup_id = self._format_commune_lookup_id(commune_code)
+        raw = await self._request({
+            "request": "GetRegionByNameOrId",
+            "id": lookup_id,
+            "result": _RESULT_FIELDS_REGION,
+        })
+        parsed = self._parse_lookup_response(
+            raw,
+            context=f"commune={lookup_id}",
+            field_names=_RESULT_FIELDS_REGION,
+        )
+        regions = self._build_regions(parsed)
+        logger.info(
+            "[ULDK] GetRegionByNameOrId commune=%s → %d region(s)",
+            lookup_id, len(regions),
+        )
+        return regions
+
+    async def resolve_parcel_by_commune_region(
+        self,
+        commune_code: str,
+        region_code: str,
+        parcel_nr: str,
+    ) -> ULDKParcel | None:
+        """Resolve a parcel by explicit commune + region code + parcel number."""
+        commune_id = self._format_commune_lookup_id(commune_code)
+        parcel_id = f"{commune_id}.{region_code.zfill(4)}.{parcel_nr}"
+        return await self.resolve_parcel_by_id(parcel_id)
 
     # ------------------------------------------------------------------
     # HTTP layer with retry + backoff
@@ -392,7 +475,7 @@ class ULDKClient:
                 )
                 await asyncio.sleep(wait)
 
-        raise ULDKAPIError(
+        raise ULDKTransientError(
             f"ULDK request failed after {self._max_retries} retries. "
             f"Last error: {last_exc}"
         ) from last_exc
@@ -403,23 +486,24 @@ class ULDKClient:
 
     @staticmethod
     def _parse_uldk_response(text: str, context: str) -> ULDKResponse:
-        """Parse ULDK CSV response into structured rows.
+        """Parse GetParcelById CSV response into structured rows.
 
-        Response format:
-          Line 0:  status code integer ("0" = success, negative = error)
-          Line 1:  semicolon-separated header row
-          Line 2+: semicolon-separated data rows
+        Actual response format (verified via curl, April 2026):
+          Line 0:  status code integer ("0" = success, "-1" = not found)
+          Line 1+: pipe-delimited data rows (NO header row)
+          Field order matches the 'result' parameter: id|voivodeship|...|geom_wkb
 
         Raises ULDKNotFoundError if status = -1 (parcel not in registry).
         Raises ULDKAPIError for other non-zero status codes.
         """
-        lines = [l.strip() for l in text.strip().splitlines() if l.strip()]
+        lines = [ln.strip() for ln in text.strip().splitlines() if ln.strip()]
 
         if not lines:
             raise ULDKAPIError(f"Empty ULDK response for {context}")
 
+        first_token = lines[0].split()[0]
         try:
-            status = int(lines[0])
+            status = int(first_token)
         except ValueError as exc:
             raise ULDKAPIError(
                 f"Could not parse ULDK status code from: {lines[0]!r} "
@@ -427,8 +511,15 @@ class ULDKClient:
             ) from exc
 
         if status == -1:
+            detail = " ".join(lines).lower()
+            if "geomet" in detail:
+                raise ULDKGeometryMissingError(
+                    f"Parcel geometry missing in ULDK registry (status=-1): {context}. "
+                    f"Response={lines[0]!r}"
+                )
             raise ULDKNotFoundError(
-                f"Parcel not found in ULDK registry: {context}"
+                f"Parcel not found in ULDK registry (status=-1): {context}. "
+                f"Response={lines[0]!r}"
             )
         if status != 0:
             detail = lines[1] if len(lines) > 1 else "no detail"
@@ -439,19 +530,116 @@ class ULDKClient:
         if len(lines) < 2:
             raise ULDKAPIError(f"ULDK response has no data rows for {context}")
 
-        headers = [h.strip() for h in lines[1].split(";")]
+        # No header row — map fields by position from _RESULT_FIELDS_ID
+        field_names = [f.strip() for f in _RESULT_FIELDS_ID.split(",")]
         rows = []
-        for line in lines[2:]:
-            values = line.split(";", maxsplit=len(headers) - 1)
-            if len(values) != len(headers):
+        for line in lines[1:]:
+            values = line.split("|", maxsplit=len(field_names) - 1)
+            if len(values) != len(field_names):
                 logger.warning(
                     "[ULDK] Skipping malformed row (expected %d cols, got %d): %r",
-                    len(headers), len(values), line[:80],
+                    len(field_names), len(values), line[:80],
                 )
                 continue
-            rows.append(dict(zip(headers, values)))
+            rows.append(dict(zip(field_names, values)))
 
         return ULDKResponse(status_code=status, parcels=rows, raw_text=text)
+
+    @staticmethod
+    def _parse_lookup_response(
+        text: str,
+        *,
+        context: str,
+        field_names: str,
+    ) -> ULDKResponse:
+        """Parse PRG lookup responses like GetRegionByNameOrId."""
+        lines = [ln.strip() for ln in text.strip().splitlines() if ln.strip()]
+
+        if not lines:
+            raise ULDKAPIError(f"Empty ULDK response for {context}")
+
+        first_token = lines[0].split()[0]
+        try:
+            status = int(first_token)
+        except ValueError as exc:
+            raise ULDKAPIError(
+                f"Could not parse lookup status from: {lines[0]!r} "
+                f"(context: {context})"
+            ) from exc
+
+        if status < 0:
+            raise ULDKNotFoundError(
+                f"Lookup returned status={status} for {context}: {lines[0]!r}"
+            )
+
+        if len(lines) < 2:
+            return ULDKResponse(status_code=0, parcels=[], raw_text=text)
+
+        names = [f.strip() for f in field_names.split(",")]
+        rows = []
+        for line in lines[1:]:
+            values = line.split("|", maxsplit=len(names) - 1)
+            if len(values) != len(names):
+                logger.warning(
+                    "[ULDK] Skipping malformed lookup row (expected %d cols, got %d): %r",
+                    len(names), len(values), line[:120],
+                )
+                continue
+            rows.append(dict(zip(names, values)))
+
+        return ULDKResponse(status_code=0, parcels=rows, raw_text=text)
+
+    @staticmethod
+    def _parse_id_or_nr_response(text: str, context: str) -> ULDKResponse:
+        """Parse GetParcelByIdOrNr CSV response.
+
+        Actual response format (verified via curl, April 2026):
+          Line 0:  count of found parcels (integer >= 0; < 0 = API error / not found)
+          Line 1+: pipe-delimited data rows (NO header row, same as GetParcelById)
+          Field order matches the 'result' parameter: id|voivodeship|...|geom_wkb
+
+        count = 0 means not found (no error raised — empty result).
+        count < 0 means not found or error (raises ULDKNotFoundError).
+        """
+        lines = [ln.strip() for ln in text.strip().splitlines() if ln.strip()]
+
+        if not lines:
+            raise ULDKAPIError(f"Empty ULDK response for {context}")
+
+        # First token on line 0 is the count (or a negative error code).
+        # ULDK sometimes returns '-1 brak wyników' (multi-word) on first line.
+        first_token = lines[0].split()[0]
+        try:
+            count = int(first_token)
+        except ValueError as exc:
+            raise ULDKAPIError(
+                f"Could not parse GetParcelByIdOrNr count from: {lines[0]!r} "
+                f"(context: {context})"
+            ) from exc
+
+        if count < 0:
+            raise ULDKNotFoundError(
+                f"GetParcelByIdOrNr returned count={count} for {context}"
+            )
+
+        if count == 0 or len(lines) < 2:
+            return ULDKResponse(status_code=0, parcels=[], raw_text=text)
+
+        # No header row — map fields by position from _RESULT_FIELDS_ID
+        field_names = [f.strip() for f in _RESULT_FIELDS_ID.split(",")]
+        rows = []
+        for line in lines[1:]:
+            values = line.split("|", maxsplit=len(field_names) - 1)
+            if len(values) != len(field_names):
+                logger.warning(
+                    "[ULDK] Skipping malformed GetParcelByIdOrNr row "
+                    "(expected %d cols, got %d): %r",
+                    len(field_names), len(values), line[:80],
+                )
+                continue
+            rows.append(dict(zip(field_names, values)))
+
+        return ULDKResponse(status_code=0, parcels=rows, raw_text=text)
 
     # ------------------------------------------------------------------
     # Parcel building (parsing + geometry validation)
@@ -484,13 +672,74 @@ class ULDKClient:
         return result
 
     @staticmethod
+    def _build_regions(response: ULDKResponse) -> list[ULDKRegion]:
+        """Convert PRG lookup rows into lightweight region descriptors."""
+        result: list[ULDKRegion] = []
+        for row in response.parcels:
+            identifier = row.get("id", "").strip()
+            if "." not in identifier:
+                logger.warning("[ULDK] Skipping malformed region identifier: %r", identifier)
+                continue
+
+            commune_id, region_code = identifier.rsplit(".", maxsplit=1)
+            commune_code = commune_id.replace("_", "")
+            if not commune_code.isdigit() or len(commune_code) != 7:
+                logger.warning(
+                    "[ULDK] Skipping region with invalid commune code %r (%r)",
+                    commune_code, identifier,
+                )
+                continue
+
+            result.append(ULDKRegion(
+                identifier=identifier,
+                commune_id=commune_id,
+                commune_code=commune_code,
+                region_code=region_code.zfill(4),
+                region_name=row.get("region", "").strip(),
+                voivodeship=row.get("voivodeship", "").strip(),
+                county=row.get("county", "").strip(),
+                commune_name=row.get("commune", "").strip(),
+            ))
+        return result
+
+    @staticmethod
     def _build_one_parcel(row: dict, identifier: str) -> ULDKParcel:
-        """Build and validate a single ULDKParcel from a CSV row dict."""
-        voivodeship = row.get("voivodeship", "").strip().zfill(2)
-        county = row.get("county", "").strip().zfill(4)
-        commune = row.get("commune", "").strip().zfill(7)
-        region = row.get("region", "").strip().zfill(4)
-        parcel = row.get("parcel", "").strip()
+        """Build and validate a single ULDKParcel from a CSV row dict.
+
+        ULDK returns human-readable names in the commune/region/voivodeship fields
+        (e.g., "Bogatynia", "Krzewina", "dolnośląskie") — NOT numeric TERYT codes.
+        TERYT codes must be parsed from the 'id' field: '022503_5.0003.134'
+          → commune='0225035' (underscore removed), region='0003', parcel='134'
+        """
+        uldk_id = row.get("id", identifier).strip() or identifier
+
+        # Parse TERYT codes from the canonical id field
+        # Format: {commune_raw}.{region4}.{parcel}  e.g. '022503_5.0003.134'
+        id_parts = uldk_id.split(".")
+        if len(id_parts) < 3:
+            raise GeometryValidationError(
+                f"Cannot parse ULDK id {uldk_id!r} — expected at least 3 dot-separated "
+                f"parts (commune.region.parcel) for {identifier!r}."
+            )
+        commune_raw = id_parts[0]                   # '022503_5' or '241201_4'
+        region_raw  = id_parts[1]                   # '0003'
+        # id may have 3+ parts: commune.region.parcel or commune.region.obreb_name.parcel
+        # Use the 'parcel' response field (just the parcel number) when available;
+        # fall back to the id-derived tail.
+        parcel_from_row = row.get("parcel", "").strip()
+        parcel = parcel_from_row or ".".join(id_parts[2:]).strip()
+
+        # Normalise commune: strip underscore → 7-digit numeric TERYT
+        # '022503_5' → replace '_' → '0225035' (7 chars); '241201_4' → '2412014'
+        commune = commune_raw.replace("_", "").zfill(7)
+        region  = region_raw.zfill(4)                    # '3' → '0003'
+
+        if not commune.isdigit() or len(commune) != 7:
+            raise GeometryValidationError(
+                f"Commune TERYT derived from id={uldk_id!r} is not a valid 7-digit "
+                f"code: {commune!r} for {identifier!r}."
+            )
+
         wkb_hex = row.get("geom_wkb", "").strip()
 
         if not wkb_hex:
@@ -515,11 +764,11 @@ class ULDKClient:
         identyfikator = f"{teryt_obreb}.{numer}"
 
         return ULDKParcel(
-            identifier=identifier,
-            voivodeship=voivodeship,
-            county=county,
-            commune=commune,
-            region=region,
+            identifier=uldk_id,
+            voivodeship=woj,       # 2-digit TERYT (derived from id)
+            county=powiat,         # 4-digit TERYT (derived from id)
+            commune=gmina,         # 7-digit TERYT (derived from id)
+            region=region,         # 4-digit obreb code (from id)
             parcel=parcel,
             teryt_wojewodztwo=woj,
             teryt_powiat=powiat,
@@ -532,3 +781,15 @@ class ULDKClient:
             area_m2=area,
             was_made_valid=not shape.is_valid,  # note: shape is now valid; was it before?
         )
+
+    @staticmethod
+    def _format_commune_lookup_id(commune_code: str) -> str:
+        """Convert a 7-digit TERYT commune code into ULDK's underscore form."""
+        code = commune_code.strip()
+        if "_" in code:
+            return code
+        if not code.isdigit() or len(code) != 7:
+            raise ULDKAPIError(
+                f"Invalid commune code for ULDK lookup: {commune_code!r}"
+            )
+        return f"{code[:6]}_{code[6]}"

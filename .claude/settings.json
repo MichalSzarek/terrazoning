@@ -1,0 +1,51 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "if echo \"$TOOL_INPUT\" | grep -q '\\.py\"' || echo \"$TOOL_INPUT\" | grep -q '\\.py$'; then file=$(echo \"$TOOL_INPUT\" | grep -oE '\"file_path\":\\s*\"[^\"]+\\.py\"' | head -1 | sed 's/.*\"file_path\":\\s*\"//;s/\"$//'); if [ -n \"$file\" ] && [ -f \"$file\" ]; then uv run ruff format --quiet \"$file\" 2>/dev/null; fi; fi",
+            "description": "Auto-format Python files with ruff after edit"
+          },
+          {
+            "type": "command",
+            "command": "file=$(echo \"$TOOL_INPUT\" | grep -oE '\"file_path\":\\s*\"[^\"]+\\.py\"' | head -1 | sed 's/.*\"file_path\":\\s*\"//;s/\"$//'); if [ -n \"$file\" ] && [ -f \"$file\" ]; then if grep -n 'print(' \"$file\" | grep -v 'structlog\\|logger\\|#.*print\\|\".*print' | head -3; then echo '[WARN] print() detected — use structlog get_logger(__name__) instead (CLAUDE.md Rule 6)'; fi; fi",
+            "description": "Warn if print() used without structlog"
+          },
+          {
+            "type": "command",
+            "command": "file=$(echo \"$TOOL_INPUT\" | grep -oE '\"file_path\":\\s*\"[^\"]+\"' | head -1 | sed 's/.*\"file_path\":\\s*\"//;s/\"$//'); if [ -n \"$file\" ]; then if echo \"$file\" | grep -qE 'src/execution/|src/risk/veto_gate|ibkr_client|crypto_client|credential|secret|password|api.key'; then echo '[SECURITY] Sensitive file modified: '\"$file\"' — consider running /python-review or security-reviewer agent'; fi; fi",
+            "description": "Flag edits to security-sensitive files"
+          },
+          {
+            "type": "command",
+            "command": "file=$(echo \"$TOOL_INPUT\" | grep -oE '\"file_path\":\\s*\"[^\"]+\"' | head -1 | sed 's/.*\"file_path\":\\s*\"//;s/\"$//'); if [ -n \"$file\" ]; then if echo \"$file\" | grep -qE 'src/agents/|src/risk/|src/execution/|src/services/trading_service|src/services/position_monitor|src/services/crypto_trading|src/data/'; then echo '[TRADING] Trading-critical file modified: '\"$file\"' — run /trading-review before committing'; fi; fi",
+            "description": "Remind to run /trading-review for trading-critical file changes"
+          },
+          {
+            "type": "command",
+            "command": "if echo \"$TOOL_USE\" | grep -q 'Write'; then file=$(echo \"$TOOL_INPUT\" | grep -oE '\"file_path\":\\s*\"[^\"]+\"' | head -1 | sed 's/.*\"file_path\":\\s*\"//;s/\"$//'); if echo \"$file\" | grep -qE '^.*/src/.*\\.py$'; then module=$(basename \"$file\" .py); testfile=$(dirname \"$file\" | sed 's|/src/|/tests/test_|;s|/|_|g')\"_${module}.py\"; if [ ! -f \"$testfile\" ]; then testfile2=\"tests/test_${module}.py\"; if [ ! -f \"$testfile2\" ]; then echo '[TDD] New source file created without matching test. Write tests first! (CLAUDE.md Rule 3)'; fi; fi; fi; fi",
+            "description": "TDD reminder when creating new source files without tests"
+          },
+          {
+            "type": "command",
+            "command": "file=$(echo \"$TOOL_INPUT\" | grep -oE '\"file_path\":\\s*\"[^\"]+\"' | head -1 | sed 's/.*\"file_path\":\\s*\"//;s/\"$//'); if [ -n \"$file\" ]; then if echo \"$file\" | grep -qE 'migrations/|src/db/|_store\\.py$'; then echo '[DB] Database-related file modified: '\"$file\"' — consider running database-reviewer agent for schema/query review'; fi; fi",
+            "description": "Suggest database-reviewer for DB-related changes"
+          }
+        ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "if echo \"$TOOL_INPUT\" | grep -qE 'pip install|pip freeze|pip uninstall|python -m pip'; then echo '[WARN] pip usage detected — ALWAYS use uv (uv add, uv sync, uv run). See CLAUDE.md Rule 2.'; fi",
+            "description": "Catch pip usage in bash commands"
+          }
+        ]
+      }
+    ]
+  }
+}
