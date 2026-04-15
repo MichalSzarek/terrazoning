@@ -2,8 +2,9 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import axios from 'axios';
 
 import type { InvestorWatchlist, InvestorWatchlistUpdatePayload } from '../types/api';
+import { buildApiPath } from '../lib/apiBase';
 
-const BASE_URL = '/api/v1';
+const BASE_URL = buildApiPath('/api/v1');
 
 async function fetchWatchlist(): Promise<InvestorWatchlist> {
   const { data } = await axios.get<InvestorWatchlist>(`${BASE_URL}/watchlist`);
@@ -52,4 +53,3 @@ export function useWatchlistAcknowledgeMutation() {
     },
   });
 }
-

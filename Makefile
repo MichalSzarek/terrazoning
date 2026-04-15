@@ -15,20 +15,57 @@ FRONTEND_HOST ?= 0.0.0.0
 FRONTEND_PORT ?= 5173
 APP_HOST ?= $(BACKEND_HOST)
 APP_PORT ?= $(BACKEND_PORT)
+GCP_PROJECT_ID ?= maths-489717
+GCP_REGION ?= europe-west1
+ARTIFACT_REGISTRY_REPOSITORY ?= python-apps
+TERRAZONING_BACKEND_IMAGE ?= terrazoning-backend
+TERRAZONING_FRONTEND_IMAGE ?= terrazoning-frontend
+TERRAZONING_API_SERVICE ?= terrazoning-api
+TERRAZONING_FRONTEND_SERVICE ?= terrazoning-frontend
+TERRAZONING_JOB_SCRAPE_LIVE ?= terrazoning-scrape-live
+TERRAZONING_JOB_GEO_RESOLVE ?= terrazoning-geo-resolve
+TERRAZONING_JOB_DELTA ?= terrazoning-delta
+TERRAZONING_JOB_PLANNING_SIGNAL_SYNC ?= terrazoning-planning-signal-sync
+TERRAZONING_JOB_FUTURE_BUILDABILITY ?= terrazoning-future-buildability
+TERRAZONING_JOB_CAMPAIGN_ROLLOUT ?= terrazoning-campaign-rollout
+TERRAZONING_FUTURE_BUILDABILITY_ENABLED ?= true
+TERRAZONING_MAP_STYLE_URL ?=
+CLOUD_BUILD_SOURCE_STAGING_DIR ?= gs://maths-cloudbuild-source-478521031206/source
+CLOUD_BUILD_SERVICE_ACCOUNT ?= projects/maths-489717/serviceAccounts/478521031206-compute@developer.gserviceaccount.com
+GCP_JOB_ARGS ?=
+TERRAZONING_FRONTEND_API_BASE_URL ?=
 
 .PHONY: help sync-all sync-backend sync-scraper sync-frontend scrape-dry scrape-live mpzp-sync mpzp-one \
 	mpzp-uncovered mpzp-registry mpzp-ruda reparse-bronze geo-resolve delta planning-signal-sync \
 	future-buildability future-buildability-status future-buildability-backlog future-buildability-smoke force-retry load-all-data \
 	refresh-all gliwice-cluster status doctor sync-slaskie sync-malopolskie report-slaskie \
-	report-malopolskie delta-gap-malopolskie campaign-slaskie campaign-malopolskie campaign-all \
-	run run-backend run-frontend backend-dev backend-cloudsql cloudsql-health
+	report-malopolskie delta-gap-malopolskie campaign-slaskie campaign-malopolskie campaign-all campaign-rollout-cloudsql \
+	run run-local run-backend run-frontend backend-dev backend-cloudsql cloudsql-health \
+	gcp-deploy-backend gcp-deploy-frontend gcp-service-urls gcp-smoke-api gcp-smoke-frontend \
+	gcp-proxy-frontend gcp-proxy-api \
+	gcp-job-scrape-live gcp-job-geo-resolve gcp-job-delta gcp-job-planning-signal-sync \
+	gcp-job-future-buildability gcp-job-campaign-rollout
 
 help:
 	@echo "TerraZoning data operations"
 	@echo ""
-	@echo "  make run               - run backend + frontend (dev) in parallel"
-	@echo "  make run-backend       - run FastAPI backend (BACKEND_PORT=8000)"
+	@echo "  make run               - run Cloud SQL backend + frontend (dev) with backend health gating"
+	@echo "  make run-local         - run local PostGIS backend + frontend (dev) with backend health gating"
+	@echo "  make run-backend       - run FastAPI backend locally (BACKEND_PORT=8000)"
 	@echo "  make run-frontend      - run Vite frontend (FRONTEND_PORT=5173)"
+	@echo "  make gcp-deploy-backend - submit Cloud Build for TerraZoning backend + jobs image sync"
+	@echo "  make gcp-deploy-frontend - submit Cloud Build for TerraZoning frontend"
+	@echo "  make gcp-service-urls  - print deployed TerraZoning Cloud Run URLs"
+	@echo "  make gcp-smoke-api     - smoke check deployed TerraZoning API"
+	@echo "  make gcp-smoke-frontend - smoke check deployed TerraZoning frontend"
+	@echo "  make gcp-proxy-frontend - proxy TerraZoning frontend locally via gcloud (default port 5173)"
+	@echo "  make gcp-proxy-api     - proxy TerraZoning API locally via gcloud (default port 8000)"
+	@echo "  make gcp-job-scrape-live - execute TerraZoning scrape-live Cloud Run job"
+	@echo "  make gcp-job-geo-resolve - execute TerraZoning geo-resolve Cloud Run job"
+	@echo "  make gcp-job-delta     - execute TerraZoning delta Cloud Run job"
+	@echo "  make gcp-job-planning-signal-sync - execute planning signal sync Cloud Run job"
+	@echo "  make gcp-job-future-buildability - execute future-buildability Cloud Run job"
+	@echo "  make gcp-job-campaign-rollout - execute TerraZoning full campaign Cloud Run job"
 	@echo "  make sync-all          - install/update backend, scraper, and frontend deps"
 	@echo "  make sync-backend      - install/update backend deps"
 	@echo "  make sync-scraper      - install/update scraper deps"
@@ -63,6 +100,7 @@ help:
 	@echo "  make campaign-slaskie  - full automated campaign for Śląskie"
 	@echo "  make campaign-malopolskie - full automated campaign for Małopolskie"
 	@echo "  make campaign-all      - run both province campaigns sequentially"
+	@echo "  make campaign-rollout-cloudsql - campaigns + planning signals + future_buildability on Cloud SQL"
 	@echo "  make doctor            - light self-heal and backend status check"
 	@echo "  make status            - print core DB counts"
 
@@ -90,103 +128,116 @@ run-backend:
 	cd backend && uv run uvicorn app.main:app --reload --host $(BACKEND_HOST) --port $(BACKEND_PORT)
 
 run-frontend:
-	cd frontend && npm run dev -- --host $(FRONTEND_HOST) --port $(FRONTEND_PORT)
+	cd frontend && VITE_API_PROXY_TARGET=http://127.0.0.1:$(BACKEND_PORT) npm run dev -- --host $(FRONTEND_HOST) --port $(FRONTEND_PORT)
 
 run:
-	$(MAKE) -j2 run-backend run-frontend
+	BACKEND_HOST=$(BACKEND_HOST) BACKEND_PORT=$(BACKEND_PORT) FRONTEND_HOST=$(FRONTEND_HOST) FRONTEND_PORT=$(FRONTEND_PORT) ./scripts/run_dev.sh
+
+run-local:
+	BACKEND_MODE=local BACKEND_HOST=$(BACKEND_HOST) BACKEND_PORT=$(BACKEND_PORT) FRONTEND_HOST=$(FRONTEND_HOST) FRONTEND_PORT=$(FRONTEND_PORT) ./scripts/run_dev.sh
 scrape-dry:
-	cd scraper && uv run python run_live.py --dry-run --provinces $(PROVINCES) --max-pages 1 --verbose
+	./scripts/run_backend_cloudsql.sh exec scraper -- uv run python run_live.py --dry-run --provinces $(PROVINCES) --max-pages 1 --verbose
 
 scrape-live:
-	cd scraper && uv run python run_live.py --provinces $(PROVINCES) --max-pages $(MAX_PAGES)
+	./scripts/run_backend_cloudsql.sh exec scraper -- uv run python run_live.py --provinces $(PROVINCES) --max-pages $(MAX_PAGES)
 
 mpzp-registry:
-	cd backend && uv run python run_wfs_sync.py --list-registry
+	./scripts/run_backend_cloudsql.sh exec backend -- uv run python run_wfs_sync.py --list-registry
 
 mpzp-uncovered:
-	cd backend && uv run python run_wfs_sync.py --list-uncovered
+	./scripts/run_backend_cloudsql.sh exec backend -- uv run python run_wfs_sync.py --list-uncovered
 
 mpzp-sync:
-	cd backend && uv run python run_wfs_sync.py
+	./scripts/run_backend_cloudsql.sh exec backend -- uv run python run_wfs_sync.py
 
 sync-slaskie:
-	cd backend && uv run python run_wfs_sync.py --province slaskie
+	./scripts/run_backend_cloudsql.sh exec backend -- uv run python run_wfs_sync.py --province slaskie
 
 sync-malopolskie:
-	cd backend && uv run python run_wfs_sync.py --province malopolskie
+	./scripts/run_backend_cloudsql.sh exec backend -- uv run python run_wfs_sync.py --province malopolskie
 
 mpzp-one:
 	@if [ -z "$(TERYT)" ]; then \
 		echo "Usage: make mpzp-one TERYT=2466011"; \
 		exit 1; \
 	fi
-	cd backend && uv run python run_wfs_sync.py --teryt $(TERYT)
+	./scripts/run_backend_cloudsql.sh exec backend -- uv run python run_wfs_sync.py --teryt $(TERYT)
 
 mpzp-ruda:
-	cd backend && uv run python run_wfs_sync.py --teryt 2472011
+	./scripts/run_backend_cloudsql.sh exec backend -- uv run python run_wfs_sync.py --teryt 2472011
 
 reparse-bronze:
-	cd scraper && uv run python reparse_bronze.py --disable-llm
+	./scripts/run_backend_cloudsql.sh exec scraper -- uv run python reparse_bronze.py --disable-llm
 
 geo-resolve:
-	cd backend && uv run python -m app.services.geo_resolver
+	./scripts/run_backend_cloudsql.sh exec backend -- uv run python -m app.services.geo_resolver
 
 delta:
-	cd backend && uv run python -m app.services.delta_engine
+	./scripts/run_backend_cloudsql.sh exec backend -- uv run python -m app.services.delta_engine
 
 planning-signal-sync:
-	cd backend && uv run python run_planning_signal_sync.py $(if $(TERYT),--teryt $(TERYT),)
+	./scripts/run_backend_cloudsql.sh exec backend -- uv run python run_planning_signal_sync.py $(if $(TERYT),--teryt $(TERYT),)
 
 future-buildability:
-	cd backend && uv run python run_future_buildability.py \
+	./scripts/run_backend_cloudsql.sh exec backend -- uv run python run_future_buildability.py \
 		--batch-size $(BATCH_SIZE) \
 		$(if $(TERYT),--teryt-gmina $(TERYT),) \
 		$(if $(PROVINCE),--province $(PROVINCE),)
 
 future-buildability-status:
-	cd backend && uv run python print_future_buildability_status.py $(if $(PROVINCE),--province $(PROVINCE),)
+	./scripts/run_backend_cloudsql.sh exec backend -- uv run python print_future_buildability_status.py $(if $(PROVINCE),--province $(PROVINCE),)
 
 future-buildability-backlog:
-	cd backend && uv run python export_future_buildability_backlog.py \
+	./scripts/run_backend_cloudsql.sh exec backend -- uv run python export_future_buildability_backlog.py \
 		$(if $(PROVINCE),--province $(PROVINCE),) \
 		--format $(BACKLOG_FORMAT) \
 		$(if $(BACKLOG_OUTPUT),--output $(BACKLOG_OUTPUT),)
 
 future-buildability-smoke:
-	cd backend && uv run python smoke_future_buildability_rollout.py \
+	./scripts/run_backend_cloudsql.sh exec backend -- uv run python smoke_future_buildability_rollout.py \
 		--expected-state $(EXPECTED_STATE) \
 		--limit $(SMOKE_LIMIT)
 
 force-retry:
-	cd backend && uv run python force_retry.py
+	./scripts/run_backend_cloudsql.sh exec backend -- uv run python force_retry.py
 
 gliwice-cluster:
-	cd backend && uv run python run_gliwice_cluster.py --replay
+	./scripts/run_backend_cloudsql.sh exec backend -- uv run python run_gliwice_cluster.py --replay
 
 report-slaskie:
-	cd backend && uv run python run_province_campaign.py --province slaskie --stage report --parallel
+	./scripts/run_backend_cloudsql.sh exec backend -- uv run python run_province_campaign.py --province slaskie --stage report --parallel
 
 report-malopolskie:
-	cd backend && uv run python run_province_campaign.py --province malopolskie --stage report --parallel
+	./scripts/run_backend_cloudsql.sh exec backend -- uv run python run_province_campaign.py --province malopolskie --stage report --parallel
 
 delta-gap-malopolskie:
-	cd backend && uv run python run_province_campaign.py --province malopolskie --stage report --parallel
+	./scripts/run_backend_cloudsql.sh exec backend -- uv run python run_province_campaign.py --province malopolskie --stage report --parallel
 
 campaign-slaskie:
-	cd backend && uv run python run_province_campaign.py --province slaskie --stage full --autofix --parallel
+	./scripts/run_backend_cloudsql.sh exec backend -- uv run python run_province_campaign.py --province slaskie --stage full --autofix --parallel
 
 campaign-malopolskie:
-	cd backend && uv run python run_province_campaign.py --province malopolskie --stage full --autofix --parallel
+	./scripts/run_backend_cloudsql.sh exec backend -- uv run python run_province_campaign.py --province malopolskie --stage full --autofix --parallel
 
 campaign-all:
 	$(MAKE) campaign-slaskie
 	$(MAKE) campaign-malopolskie
 
+campaign-rollout-cloudsql:
+	$(MAKE) campaign-slaskie
+	$(MAKE) campaign-malopolskie
+	$(MAKE) planning-signal-sync
+	$(MAKE) future-buildability PROVINCE=slaskie
+	$(MAKE) future-buildability PROVINCE=malopolskie
+	$(MAKE) future-buildability-status PROVINCE=slaskie
+	$(MAKE) future-buildability-status PROVINCE=malopolskie
+	$(MAKE) status
+
 doctor:
-	cd backend && (uv run python print_status.py || (uv sync && uv run python print_status.py))
+	./scripts/run_backend_cloudsql.sh exec backend -- uv run python print_status.py
 
 status:
-	cd backend && uv run python print_status.py
+	./scripts/run_backend_cloudsql.sh exec backend -- uv run python print_status.py
 
 load-all-data:
 	$(MAKE) mpzp-sync
@@ -202,3 +253,60 @@ refresh-all:
 	$(MAKE) planning-signal-sync
 	$(MAKE) future-buildability
 	$(MAKE) status
+
+gcp-deploy-backend:
+	gcloud builds submit --config cloudbuild.backend.yaml --project $(GCP_PROJECT_ID) \
+		--service-account $(CLOUD_BUILD_SERVICE_ACCOUNT) \
+		--gcs-source-staging-dir $(CLOUD_BUILD_SOURCE_STAGING_DIR) \
+		--substitutions SHORT_SHA=$$(git rev-parse --short HEAD),_PROJECT_ID=$(GCP_PROJECT_ID),_REGION=$(GCP_REGION),_REPOSITORY=$(ARTIFACT_REGISTRY_REPOSITORY),_IMAGE=$(TERRAZONING_BACKEND_IMAGE),_SERVICE=$(TERRAZONING_API_SERVICE),_SYNC_JOBS=true,_JOB_SCRAPE_LIVE=$(TERRAZONING_JOB_SCRAPE_LIVE),_JOB_GEO_RESOLVE=$(TERRAZONING_JOB_GEO_RESOLVE),_JOB_DELTA=$(TERRAZONING_JOB_DELTA),_JOB_PLANNING_SIGNAL_SYNC=$(TERRAZONING_JOB_PLANNING_SIGNAL_SYNC),_JOB_FUTURE_BUILDABILITY=$(TERRAZONING_JOB_FUTURE_BUILDABILITY),_JOB_CAMPAIGN_ROLLOUT=$(TERRAZONING_JOB_CAMPAIGN_ROLLOUT)
+
+gcp-deploy-frontend:
+	@API_BASE_URL="$(TERRAZONING_FRONTEND_API_BASE_URL)"; \
+	if [ -z "$$API_BASE_URL" ]; then \
+		API_BASE_URL="$$(gcloud run services describe $(TERRAZONING_API_SERVICE) --project $(GCP_PROJECT_ID) --region $(GCP_REGION) --format='value(status.url)')"; \
+	fi; \
+	gcloud builds submit --config cloudbuild.frontend.yaml --project $(GCP_PROJECT_ID) \
+		--service-account $(CLOUD_BUILD_SERVICE_ACCOUNT) \
+		--gcs-source-staging-dir $(CLOUD_BUILD_SOURCE_STAGING_DIR) \
+		--substitutions SHORT_SHA=$$(git rev-parse --short HEAD),_PROJECT_ID=$(GCP_PROJECT_ID),_REGION=$(GCP_REGION),_REPOSITORY=$(ARTIFACT_REGISTRY_REPOSITORY),_IMAGE=$(TERRAZONING_FRONTEND_IMAGE),_SERVICE=$(TERRAZONING_FRONTEND_SERVICE),_API_BASE_URL=$$API_BASE_URL,_FUTURE_BUILDABILITY_ENABLED=$(TERRAZONING_FUTURE_BUILDABILITY_ENABLED),_MAP_STYLE_URL=$(TERRAZONING_MAP_STYLE_URL)
+
+gcp-service-urls:
+	@printf 'API: '
+	@gcloud run services describe $(TERRAZONING_API_SERVICE) --project $(GCP_PROJECT_ID) --region $(GCP_REGION) --format='value(status.url)'
+	@printf 'Frontend: '
+	@gcloud run services describe $(TERRAZONING_FRONTEND_SERVICE) --project $(GCP_PROJECT_ID) --region $(GCP_REGION) --format='value(status.url)'
+
+gcp-smoke-api:
+	@API_URL=$$(gcloud run services describe $(TERRAZONING_API_SERVICE) --project $(GCP_PROJECT_ID) --region $(GCP_REGION) --format='value(status.url)'); \
+	curl --fail --show-error --silent "$${API_URL}/api/v1/health" >/dev/null && echo "API smoke check ok: $${API_URL}"
+
+gcp-smoke-frontend:
+	@FRONTEND_URL=$$(gcloud run services describe $(TERRAZONING_FRONTEND_SERVICE) --project $(GCP_PROJECT_ID) --region $(GCP_REGION) --format='value(status.url)'); \
+	curl --fail --show-error --silent "$${FRONTEND_URL}" >/dev/null && echo "Frontend smoke check ok: $${FRONTEND_URL}"
+
+gcp-proxy-frontend:
+	gcloud run services proxy $(TERRAZONING_FRONTEND_SERVICE) --project $(GCP_PROJECT_ID) --region $(GCP_REGION) --port $(FRONTEND_PORT)
+
+gcp-proxy-api:
+	gcloud run services proxy $(TERRAZONING_API_SERVICE) --project $(GCP_PROJECT_ID) --region $(GCP_REGION) --port $(BACKEND_PORT)
+
+gcp-job-scrape-live:
+	gcloud run jobs execute $(TERRAZONING_JOB_SCRAPE_LIVE) --project $(GCP_PROJECT_ID) --region $(GCP_REGION) --wait
+
+gcp-job-geo-resolve:
+	gcloud run jobs execute $(TERRAZONING_JOB_GEO_RESOLVE) --project $(GCP_PROJECT_ID) --region $(GCP_REGION) --wait
+
+gcp-job-delta:
+	gcloud run jobs execute $(TERRAZONING_JOB_DELTA) --project $(GCP_PROJECT_ID) --region $(GCP_REGION) --wait
+
+gcp-job-planning-signal-sync:
+	gcloud run jobs execute $(TERRAZONING_JOB_PLANNING_SIGNAL_SYNC) --project $(GCP_PROJECT_ID) --region $(GCP_REGION) --wait \
+		$(if $(GCP_JOB_ARGS),--args "$(GCP_JOB_ARGS)",)
+
+gcp-job-future-buildability:
+	gcloud run jobs execute $(TERRAZONING_JOB_FUTURE_BUILDABILITY) --project $(GCP_PROJECT_ID) --region $(GCP_REGION) --wait \
+		$(if $(GCP_JOB_ARGS),--args "$(GCP_JOB_ARGS)",)
+
+gcp-job-campaign-rollout:
+	gcloud run jobs execute $(TERRAZONING_JOB_CAMPAIGN_ROLLOUT) --project $(GCP_PROJECT_ID) --region $(GCP_REGION) --wait \
+		$(if $(GCP_JOB_ARGS),--args "$(GCP_JOB_ARGS)",)

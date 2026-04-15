@@ -921,9 +921,10 @@ function getFeatureCollectionBounds(
 interface LeadsMapProps {
   data: LeadsFeatureCollection | undefined;
   quarantineData?: QuarantineParcelFeatureCollection | undefined;
+  focusResultsNonce?: number;
 }
 
-export function LeadsMap({ data, quarantineData }: LeadsMapProps) {
+export function LeadsMap({ data, quarantineData, focusResultsNonce = 0 }: LeadsMapProps) {
   const mapRef = useRef<MapRef>(null);
   const autoFitSignatureRef = useRef<string | null>(null);
   const [hoverInfo, setHoverInfo] = useState<HoverInfo | null>(null);
@@ -1230,6 +1231,19 @@ export function LeadsMap({ data, quarantineData }: LeadsMapProps) {
     selectedLeadId,
     selectedQuarantineId,
   ]);
+
+  useEffect(() => {
+    if (!mapLoaded || !mapRef.current || !allFeatureBounds) {
+      return;
+    }
+
+    const map = mapRef.current.getMap();
+    map.fitBounds(allFeatureBounds, {
+      padding: FIT_BOUNDS_PADDING,
+      maxZoom: AUTO_FIT_MAX_ZOOM,
+      duration: 850,
+    });
+  }, [allFeatureBounds, focusResultsNonce, mapLoaded]);
 
   // ---------------------------------------------------------------------------
   // Render

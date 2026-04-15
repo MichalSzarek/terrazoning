@@ -600,6 +600,7 @@ class GeoResolver:
         """
         listing_id = listing.id
         log_prefix = f"[GeoResolver] listing={listing_id}"
+        dlq_raw_input = listing.raw_kw or listing.raw_numer_dzialki or str(listing_id)
 
         try:
             parcels: list[ULDKParcel] = []
@@ -628,6 +629,7 @@ class GeoResolver:
                     "but no parcel number or obreb. GetParcelByKW does not exist "
                     "in ULDK (confirmed April 2026). Requires ekw.ms.gov.pl integration.",
                     attempt=1,
+                    raw_input=dlq_raw_input,
                 )
                 await self._mark_processed(listing_id)
                 return "dlq"
@@ -853,7 +855,12 @@ class GeoResolver:
                 return "dlq"
 
             if transient_failure:
-                await self._send_to_dlq(listing_id, transient_failure, attempt=1)
+                await self._send_to_dlq(
+                    listing_id,
+                    transient_failure,
+                    attempt=1,
+                    raw_input=dlq_raw_input,
+                )
                 await self._mark_processed(listing_id)
                 return "dlq"
 
@@ -895,7 +902,7 @@ class GeoResolver:
                     f"ULDK_NOT_FOUND: parcel_id={parcel_id_attempt!r} not found in ULDK. "
                     f"raw_kw={kw!r}, raw_obreb={obreb!r}"
                 )
-            await self._send_to_dlq(listing_id, reason, attempt=1)
+            await self._send_to_dlq(listing_id, reason, attempt=1, raw_input=dlq_raw_input)
             await self._mark_processed(listing_id)
             return "dlq"
 
@@ -908,6 +915,7 @@ class GeoResolver:
                 listing_id,
                 f"Unexpected error: {type(exc).__name__}: {exc}",
                 attempt=1,
+                raw_input=dlq_raw_input,
             )
             await self._mark_processed(listing_id)
             return "dlq"
@@ -1041,6 +1049,7 @@ class GeoResolver:
         listing_id: UUID,
         error: str,
         attempt: int = 1,
+        raw_input: str | None = None,
     ) -> None:
         """Insert or increment a DLQ entry for the given listing.
 
@@ -1066,15 +1075,16 @@ class GeoResolver:
                 listing_id, new_attempt, row.next_retry_at.isoformat(),
             )
         else:
-            # Fetch the raw_teryt_input to store in DLQ for traceability
-            listing_q = await self.db.execute(
-                select(RawListing).where(RawListing.id == listing_id)
-            )
-            listing = listing_q.scalar_one_or_none()
-            raw_input = (
-                listing.raw_kw or listing.raw_numer_dzialki or str(listing_id)
-                if listing else str(listing_id)
-            )
+            if raw_input is None:
+                # Fallback path for callers that do not already have the listing payload.
+                listing_q = await self.db.execute(
+                    select(RawListing).where(RawListing.id == listing_id)
+                )
+                listing = listing_q.scalar_one_or_none()
+                raw_input = (
+                    listing.raw_kw or listing.raw_numer_dzialki or str(listing_id)
+                    if listing else str(listing_id)
+                )
 
             dlq = DlqParcel(
                 listing_id=listing_id,

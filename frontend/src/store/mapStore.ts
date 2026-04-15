@@ -10,8 +10,11 @@ import type { FutureConfidenceBand, LeadStatus, LeadStrategyType } from '../type
 export type LeadSortKey =
   | 'investment_score_desc'
   | 'confidence_desc'
+  | 'total_price_asc'
+  | 'total_price_desc'
   | 'price_per_m2_asc'
   | 'entry_price_asc'
+  | 'area_desc'
   | 'buildable_area_desc';
 
 export type PriceFilterKey =
@@ -31,6 +34,13 @@ export type StrategyFilterKey =
 export type ConfidenceBandFilterKey =
   | 'all'
   | FutureConfidenceBand;
+
+export interface NumericRangeFilter {
+  min: number | null;
+  max: number | null;
+}
+
+export type InvestorWorkspaceView = 'results' | 'shortlist' | 'watchlist' | 'quarantine';
 
 interface MapStore {
   /** lead_id of the currently selected parcel (click) */
@@ -69,6 +79,39 @@ interface MapStore {
 
   cheapOnly: boolean;
   setCheapOnly: (value: boolean) => void;
+
+  totalPriceRange: NumericRangeFilter;
+  setTotalPriceRange: (range: NumericRangeFilter) => void;
+
+  pricePerM2Range: NumericRangeFilter;
+  setPricePerM2Range: (range: NumericRangeFilter) => void;
+
+  areaRange: NumericRangeFilter;
+  setAreaRange: (range: NumericRangeFilter) => void;
+
+  minCoveragePct: number | null;
+  setMinCoveragePct: (value: number | null) => void;
+
+  minBuildableAreaM2: number | null;
+  setMinBuildableAreaM2: (value: number | null) => void;
+
+  designationFilter: string;
+  setDesignationFilter: (value: string) => void;
+
+  searchQuery: string;
+  setSearchQuery: (value: string) => void;
+
+  terytPrefix: string;
+  setTerytPrefix: (value: string) => void;
+
+  terytGmina: string;
+  setTerytGmina: (value: string) => void;
+
+  showAdvancedFilters: boolean;
+  setShowAdvancedFilters: (value: boolean) => void;
+
+  workspaceView: InvestorWorkspaceView;
+  setWorkspaceView: (value: InvestorWorkspaceView) => void;
 }
 
 export const useMapStore = create<MapStore>((set) => ({
@@ -104,4 +147,37 @@ export const useMapStore = create<MapStore>((set) => ({
 
   cheapOnly: false,
   setCheapOnly: (value) => set({ cheapOnly: value }),
+
+  totalPriceRange: { min: null, max: null },
+  setTotalPriceRange: (range) => set({ totalPriceRange: range }),
+
+  pricePerM2Range: { min: null, max: null },
+  setPricePerM2Range: (range) => set({ pricePerM2Range: range }),
+
+  areaRange: { min: null, max: null },
+  setAreaRange: (range) => set({ areaRange: range }),
+
+  minCoveragePct: null,
+  setMinCoveragePct: (value) => set({ minCoveragePct: value }),
+
+  minBuildableAreaM2: null,
+  setMinBuildableAreaM2: (value) => set({ minBuildableAreaM2: value }),
+
+  designationFilter: '',
+  setDesignationFilter: (value) => set({ designationFilter: value }),
+
+  searchQuery: '',
+  setSearchQuery: (value) => set({ searchQuery: value }),
+
+  terytPrefix: '',
+  setTerytPrefix: (value) => set({ terytPrefix: value }),
+
+  terytGmina: '',
+  setTerytGmina: (value) => set({ terytGmina: value }),
+
+  showAdvancedFilters: false,
+  setShowAdvancedFilters: (value) => set({ showAdvancedFilters: value }),
+
+  workspaceView: 'results',
+  setWorkspaceView: (value) => set({ workspaceView: value }),
 }));

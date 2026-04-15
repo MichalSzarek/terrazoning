@@ -1,0 +1,81 @@
+name: Deploy TerraZoning backend and jobs
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: deploy-terrazoning-backend
+  cancel-in-progress: false
+
+env:
+  PROJECT_ID: ${{ vars.GCP_PROJECT_ID || 'maths-489717' }}
+  REGION: ${{ vars.GCP_REGION || 'europe-west1' }}
+  REPOSITORY: ${{ vars.ARTIFACT_REGISTRY_REPOSITORY || 'python-apps' }}
+  IMAGE: ${{ vars.TERRAZONING_BACKEND_IMAGE || 'terrazoning-backend' }}
+  SERVICE: ${{ vars.TERRAZONING_API_SERVICE || 'terrazoning-api' }}
+  JOB_SCRAPE_LIVE: ${{ vars.TERRAZONING_JOB_SCRAPE_LIVE || 'terrazoning-scrape-live' }}
+  JOB_GEO_RESOLVE: ${{ vars.TERRAZONING_JOB_GEO_RESOLVE || 'terrazoning-geo-resolve' }}
+  JOB_DELTA: ${{ vars.TERRAZONING_JOB_DELTA || 'terrazoning-delta' }}
+  JOB_PLANNING_SIGNAL_SYNC: ${{ vars.TERRAZONING_JOB_PLANNING_SIGNAL_SYNC || 'terrazoning-planning-signal-sync' }}
+  JOB_FUTURE_BUILDABILITY: ${{ vars.TERRAZONING_JOB_FUTURE_BUILDABILITY || 'terrazoning-future-buildability' }}
+  JOB_CAMPAIGN_ROLLOUT: ${{ vars.TERRAZONING_JOB_CAMPAIGN_ROLLOUT || 'terrazoning-campaign-rollout' }}
+  CLOUD_BUILD_SOURCE_STAGING_DIR: ${{ vars.CLOUD_BUILD_SOURCE_STAGING_DIR || 'gs://maths-cloudbuild-source-478521031206/source' }}
+  CLOUD_BUILD_SERVICE_ACCOUNT: ${{ vars.CLOUD_BUILD_SERVICE_ACCOUNT || 'projects/maths-489717/serviceAccounts/478521031206-compute@developer.gserviceaccount.com' }}
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v3
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_DEPLOY_SERVICE_ACCOUNT }}
+
+      - name: Set up gcloud SDK
+        uses: google-github-actions/setup-gcloud@v3
+        with:
+          project_id: ${{ env.PROJECT_ID }}
+
+      - name: Submit Cloud Build
+        shell: bash
+        run: |
+          SHORT_SHA="${GITHUB_SHA::7}"
+          gcloud builds submit \
+            --config cloudbuild.backend.yaml \
+            --project "${PROJECT_ID}" \
+            --service-account "${CLOUD_BUILD_SERVICE_ACCOUNT}" \
+            --gcs-source-staging-dir "${CLOUD_BUILD_SOURCE_STAGING_DIR}" \
+            --substitutions "SHORT_SHA=${SHORT_SHA},_PROJECT_ID=${PROJECT_ID},_REGION=${REGION},_REPOSITORY=${REPOSITORY},_IMAGE=${IMAGE},_SERVICE=${SERVICE},_SYNC_JOBS=true,_JOB_SCRAPE_LIVE=${JOB_SCRAPE_LIVE},_JOB_GEO_RESOLVE=${JOB_GEO_RESOLVE},_JOB_DELTA=${JOB_DELTA},_JOB_PLANNING_SIGNAL_SYNC=${JOB_PLANNING_SIGNAL_SYNC},_JOB_FUTURE_BUILDABILITY=${JOB_FUTURE_BUILDABILITY},_JOB_CAMPAIGN_ROLLOUT=${JOB_CAMPAIGN_ROLLOUT}"
+
+      - name: Show deployed service and synced jobs
+        shell: bash
+        run: |
+          gcloud run services describe "${SERVICE}" \
+            --region "${REGION}" \
+            --project "${PROJECT_ID}" \
+            --format='value(status.url)'
+          for job in \
+            "${JOB_SCRAPE_LIVE}" \
+            "${JOB_GEO_RESOLVE}" \
+            "${JOB_DELTA}" \
+            "${JOB_PLANNING_SIGNAL_SYNC}" \
+            "${JOB_FUTURE_BUILDABILITY}" \
+            "${JOB_CAMPAIGN_ROLLOUT}"; do
+            gcloud run jobs describe "${job}" \
+              --region "${REGION}" \
+              --project "${PROJECT_ID}" \
+              --format='value(spec.template.template.spec.containers[0].image)' \
+              || echo "Job ${job} not found (may not be created yet)"
+          done

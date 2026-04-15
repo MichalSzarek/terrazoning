@@ -1,0 +1,83 @@
+name: Deploy TerraZoning frontend
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: deploy-terrazoning-frontend
+  cancel-in-progress: false
+
+env:
+  PROJECT_ID: ${{ vars.GCP_PROJECT_ID || 'maths-489717' }}
+  REGION: ${{ vars.GCP_REGION || 'europe-west1' }}
+  REPOSITORY: ${{ vars.ARTIFACT_REGISTRY_REPOSITORY || 'python-apps' }}
+  IMAGE: ${{ vars.TERRAZONING_FRONTEND_IMAGE || 'terrazoning-frontend' }}
+  SERVICE: ${{ vars.TERRAZONING_FRONTEND_SERVICE || 'terrazoning-frontend' }}
+  API_SERVICE: ${{ vars.TERRAZONING_API_SERVICE || 'terrazoning-api' }}
+  SAME_ORIGIN_API: ${{ vars.TERRAZONING_SAME_ORIGIN_API || 'false' }}
+  API_BASE_URL_OVERRIDE: ${{ vars.TERRAZONING_API_BASE_URL || '' }}
+  FUTURE_BUILDABILITY_ENABLED: ${{ vars.TERRAZONING_FUTURE_BUILDABILITY_ENABLED || 'true' }}
+  MAP_STYLE_URL: ${{ vars.TERRAZONING_MAP_STYLE_URL || '' }}
+  CLOUD_BUILD_SOURCE_STAGING_DIR: ${{ vars.CLOUD_BUILD_SOURCE_STAGING_DIR || 'gs://maths-cloudbuild-source-478521031206/source' }}
+  CLOUD_BUILD_SERVICE_ACCOUNT: ${{ vars.CLOUD_BUILD_SERVICE_ACCOUNT || 'projects/maths-489717/serviceAccounts/478521031206-compute@developer.gserviceaccount.com' }}
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v3
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_DEPLOY_SERVICE_ACCOUNT }}
+
+      - name: Set up gcloud SDK
+        uses: google-github-actions/setup-gcloud@v3
+        with:
+          project_id: ${{ env.PROJECT_ID }}
+
+      - name: Resolve API base URL
+        id: api
+        shell: bash
+        run: |
+          if [[ -n "${API_BASE_URL_OVERRIDE}" ]]; then
+            API_BASE_URL="${API_BASE_URL_OVERRIDE}"
+          elif [[ "${SAME_ORIGIN_API}" == "true" ]]; then
+            API_BASE_URL=""
+          else
+            API_BASE_URL="$(gcloud run services describe "${API_SERVICE}" \
+              --region "${REGION}" \
+              --project "${PROJECT_ID}" \
+              --format='value(status.url)')"
+          fi
+          echo "api_base_url=${API_BASE_URL}" >> "${GITHUB_OUTPUT}"
+
+      - name: Submit Cloud Build
+        shell: bash
+        run: |
+          SHORT_SHA="${GITHUB_SHA::7}"
+          gcloud builds submit \
+            --config cloudbuild.frontend.yaml \
+            --project "${PROJECT_ID}" \
+            --service-account "${CLOUD_BUILD_SERVICE_ACCOUNT}" \
+            --gcs-source-staging-dir "${CLOUD_BUILD_SOURCE_STAGING_DIR}" \
+            --substitutions "SHORT_SHA=${SHORT_SHA},_PROJECT_ID=${PROJECT_ID},_REGION=${REGION},_REPOSITORY=${REPOSITORY},_IMAGE=${IMAGE},_SERVICE=${SERVICE},_API_BASE_URL=${{ steps.api.outputs.api_base_url }},_FUTURE_BUILDABILITY_ENABLED=${FUTURE_BUILDABILITY_ENABLED},_MAP_STYLE_URL=${MAP_STYLE_URL}"
+
+      - name: Show deployed service URL
+        shell: bash
+        run: |
+          gcloud run services describe "${SERVICE}" \
+            --region "${REGION}" \
+            --project "${PROJECT_ID}" \
+            --format='value(status.url)'

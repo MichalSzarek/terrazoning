@@ -8,8 +8,9 @@ import type {
   QuarantineParcelFeatureCollection,
   QuarantineParcelProperties,
 } from '../types/api';
+import { buildApiPath } from '../lib/apiBase';
 
-const BASE_URL = '/api/v1';
+const BASE_URL = buildApiPath('/api/v1');
 
 function asString(value: unknown): string | null {
   return typeof value === 'string' && value.trim() !== '' ? value : null;

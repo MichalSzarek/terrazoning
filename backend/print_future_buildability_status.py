@@ -332,14 +332,17 @@ async def build_future_buildability_status_payload(
             html_sources = await asyncio.wait_for(probe_html_index_registry(), timeout=20.0)
         except asyncio.TimeoutError:
             html_sources = []
-    coverage_rows, lead_rows, backlog_rows, top_rows, freshness, benchmark_gap_rows = await asyncio.gather(
-        _fetch_rows(_SIGNAL_COVERAGE_QUERY, province_prefix=province_prefix),
-        _fetch_rows(_FUTURE_LEADS_QUERY, province_prefix=province_prefix),
-        _load_backlog_rows(province_prefix=province_prefix, html_sources=html_sources),
-        _fetch_rows(_TOP_CANDIDATES_QUERY, province_prefix=province_prefix),
-        _load_freshness_snapshot(province_prefix=province_prefix),
-        _load_benchmark_gap_rows(province_prefix=province_prefix),
-    )
+    # Cloud SQL has a fairly tight connection ceiling, and each helper opens
+    # its own session. Running all six concurrently is fast locally but can
+    # exhaust shared connections during heavy province campaigns. Keep this
+    # status report deterministic and cheap by resolving the queries in
+    # sequence.
+    coverage_rows = await _fetch_rows(_SIGNAL_COVERAGE_QUERY, province_prefix=province_prefix)
+    lead_rows = await _fetch_rows(_FUTURE_LEADS_QUERY, province_prefix=province_prefix)
+    backlog_rows = await _load_backlog_rows(province_prefix=province_prefix, html_sources=html_sources)
+    top_rows = await _fetch_rows(_TOP_CANDIDATES_QUERY, province_prefix=province_prefix)
+    freshness = await _load_freshness_snapshot(province_prefix=province_prefix)
+    benchmark_gap_rows = await _load_benchmark_gap_rows(province_prefix=province_prefix)
 
     html_index_status_by_teryt = {
         row.teryt_gmina: row

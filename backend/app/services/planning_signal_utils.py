@@ -14,6 +14,18 @@ HARD_NEGATIVE_DESIGNATIONS = frozenset(
 _RESIDENTIAL_TOKENS = frozenset({"MN", "MW", "ML", "MR"})
 _SERVICE_TOKENS = frozenset({"U", "UC", "UK", "UT", "UH", "US", "UI", "UA", "UN", "UZ", "CU", "UP"})
 _MIXED_TOKENS = frozenset({"MU", "UM", "MNU", "MN/U", "U/MN", "U/MW", "MW/U"})
+_PLANNING_SYMBOLS = tuple(sorted(_RESIDENTIAL_TOKENS | _SERVICE_TOKENS | _MIXED_TOKENS, key=len, reverse=True))
+
+
+def _extract_description_symbols(description: str) -> set[str]:
+    """Extract planning symbols embedded in prose snippets like `Z14.1UP-UC`."""
+    desc_upper = description.upper()
+    matches: set[str] = set()
+    for token in _PLANNING_SYMBOLS:
+        pattern = re.compile(rf"(?<![A-ZĄĆĘŁŃÓŚŹŻ]){re.escape(token)}(?![A-ZĄĆĘŁŃÓŚŹŻ])")
+        if pattern.search(desc_upper):
+            matches.add(token)
+    return matches
 
 
 def normalize_designation_class(
@@ -29,6 +41,14 @@ def normalize_designation_class(
         for token in re.split(r"[/,;\\s]+", normalized_symbol.replace("-", "/"))
         if token
     }
+    desc_symbols = _extract_description_symbols(desc)
+    tokens |= {
+        token
+        for symbol in desc_symbols
+        for token in re.split(r"[/,;\\s]+", symbol.replace("-", "/"))
+        if token
+    }
+    document_designation = normalized_symbol in {"POG", "SUIKZP", "STUDIUM", "MPZP"}
 
     if is_buildable_symbol(normalized_symbol):
         if "/" in normalized_symbol or normalized_symbol in {"MU", "UM", "MNU"}:
@@ -36,6 +56,9 @@ def normalize_designation_class(
         if normalized_symbol.startswith("U"):
             return "service"
         return "residential"
+
+    if document_designation and not desc_symbols and "mieszk" not in desc and "usług" not in desc:
+        return "unknown"
 
     if normalized_symbol in _MIXED_TOKENS or ("mieszk" in desc and "usług" in desc):
         return "mixed_residential"

@@ -152,6 +152,40 @@ _LEADS_QUERY = text(
               AND il.price_per_m2_zl IS NOT NULL
           )
       )
+      AND (CAST(:min_price_zl AS double precision) IS NULL OR rl.price_zl >= CAST(:min_price_zl AS double precision))
+      AND (CAST(:max_price_zl AS double precision) IS NULL OR rl.price_zl <= CAST(:max_price_zl AS double precision))
+      AND (
+          CAST(:min_price_per_m2_zl AS double precision) IS NULL
+          OR il.price_per_m2_zl >= CAST(:min_price_per_m2_zl AS double precision)
+      )
+      AND (
+          CAST(:max_price_per_m2_zl AS double precision) IS NULL
+          OR il.price_per_m2_zl <= CAST(:max_price_per_m2_zl AS double precision)
+      )
+      AND (CAST(:min_area_m2 AS double precision) IS NULL OR d.area_m2 >= CAST(:min_area_m2 AS double precision))
+      AND (CAST(:max_area_m2 AS double precision) IS NULL OR d.area_m2 <= CAST(:max_area_m2 AS double precision))
+      AND (
+          CAST(:min_coverage_pct AS double precision) IS NULL
+          OR il.max_coverage_pct >= CAST(:min_coverage_pct AS double precision)
+      )
+      AND (
+          CAST(:min_buildable_area_m2 AS double precision) IS NULL
+          OR (d.area_m2 * COALESCE(il.max_coverage_pct, 0) / 100.0) >= CAST(:min_buildable_area_m2 AS double precision)
+      )
+      AND (CAST(:teryt_prefix AS text) IS NULL OR d.teryt_gmina LIKE CAST(:teryt_prefix AS text) || '%')
+      AND (CAST(:teryt_gmina AS text) IS NULL OR d.teryt_gmina = CAST(:teryt_gmina AS text))
+      AND (
+          CAST(:designation AS text) IS NULL
+          OR COALESCE(il.dominant_przeznaczenie, '') ILIKE '%' || CAST(:designation AS text) || '%'
+          OR COALESCE(il.dominant_future_signal, '') ILIKE '%' || CAST(:designation AS text) || '%'
+      )
+      AND (
+          CAST(:search AS text) IS NULL
+          OR d.identyfikator ILIKE '%' || CAST(:search AS text) || '%'
+          OR COALESCE(rl.source_url, '') ILIKE '%' || CAST(:search AS text) || '%'
+          OR COALESCE(il.dominant_future_signal, '') ILIKE '%' || CAST(:search AS text) || '%'
+          OR COALESCE(il.notes, '') ILIKE '%' || CAST(:search AS text) || '%'
+      )
     ORDER BY il.confidence_score DESC, il.created_at DESC
     LIMIT :limit
     """
@@ -161,6 +195,8 @@ _LEADS_COUNT_QUERY = text(
     """
     SELECT COUNT(*)
     FROM gold.investment_leads il
+    JOIN silver.dzialki d ON d.id = il.dzialka_id
+    LEFT JOIN bronze.raw_listings rl ON rl.id = il.listing_id
     WHERE il.confidence_score >= :min_score
       AND (CAST(:status_filter AS text) IS NULL OR il.status = CAST(:status_filter AS text))
       AND (CAST(:status_filter AS text) = 'rejected' OR il.status != 'rejected')
@@ -179,6 +215,40 @@ _LEADS_COUNT_QUERY = text(
               COALESCE(il.strategy_type, 'current_buildable') = 'current_buildable'
               AND il.price_per_m2_zl IS NOT NULL
           )
+      )
+      AND (CAST(:min_price_zl AS double precision) IS NULL OR rl.price_zl >= CAST(:min_price_zl AS double precision))
+      AND (CAST(:max_price_zl AS double precision) IS NULL OR rl.price_zl <= CAST(:max_price_zl AS double precision))
+      AND (
+          CAST(:min_price_per_m2_zl AS double precision) IS NULL
+          OR il.price_per_m2_zl >= CAST(:min_price_per_m2_zl AS double precision)
+      )
+      AND (
+          CAST(:max_price_per_m2_zl AS double precision) IS NULL
+          OR il.price_per_m2_zl <= CAST(:max_price_per_m2_zl AS double precision)
+      )
+      AND (CAST(:min_area_m2 AS double precision) IS NULL OR d.area_m2 >= CAST(:min_area_m2 AS double precision))
+      AND (CAST(:max_area_m2 AS double precision) IS NULL OR d.area_m2 <= CAST(:max_area_m2 AS double precision))
+      AND (
+          CAST(:min_coverage_pct AS double precision) IS NULL
+          OR il.max_coverage_pct >= CAST(:min_coverage_pct AS double precision)
+      )
+      AND (
+          CAST(:min_buildable_area_m2 AS double precision) IS NULL
+          OR (d.area_m2 * COALESCE(il.max_coverage_pct, 0) / 100.0) >= CAST(:min_buildable_area_m2 AS double precision)
+      )
+      AND (CAST(:teryt_prefix AS text) IS NULL OR d.teryt_gmina LIKE CAST(:teryt_prefix AS text) || '%')
+      AND (CAST(:teryt_gmina AS text) IS NULL OR d.teryt_gmina = CAST(:teryt_gmina AS text))
+      AND (
+          CAST(:designation AS text) IS NULL
+          OR COALESCE(il.dominant_przeznaczenie, '') ILIKE '%' || CAST(:designation AS text) || '%'
+          OR COALESCE(il.dominant_future_signal, '') ILIKE '%' || CAST(:designation AS text) || '%'
+      )
+      AND (
+          CAST(:search AS text) IS NULL
+          OR d.identyfikator ILIKE '%' || CAST(:search AS text) || '%'
+          OR COALESCE(rl.source_url, '') ILIKE '%' || CAST(:search AS text) || '%'
+          OR COALESCE(il.dominant_future_signal, '') ILIKE '%' || CAST(:search AS text) || '%'
+          OR COALESCE(il.notes, '') ILIKE '%' || CAST(:search AS text) || '%'
       )
     """
 )
@@ -383,6 +453,18 @@ async def list_leads(
         default=False,
         description="When true, return only leads with a positive cheapness signal or a defined price/m².",
     ),
+    min_price_zl: Optional[float] = Query(default=None, ge=0.0, description="Minimum total entry price in PLN."),
+    max_price_zl: Optional[float] = Query(default=None, ge=0.0, description="Maximum total entry price in PLN."),
+    min_price_per_m2_zl: Optional[float] = Query(default=None, ge=0.0, description="Minimum price per m² in PLN."),
+    max_price_per_m2_zl: Optional[float] = Query(default=None, ge=0.0, description="Maximum price per m² in PLN."),
+    min_area_m2: Optional[float] = Query(default=None, ge=0.0, description="Minimum parcel area in m²."),
+    max_area_m2: Optional[float] = Query(default=None, ge=0.0, description="Maximum parcel area in m²."),
+    min_coverage_pct: Optional[float] = Query(default=None, ge=0.0, le=100.0, description="Minimum planning coverage percentage."),
+    min_buildable_area_m2: Optional[float] = Query(default=None, ge=0.0, description="Minimum buildable area estimate in m²."),
+    teryt_prefix: Optional[str] = Query(default=None, description="Prefix of TERYT gmina, e.g. 12 for Małopolskie."),
+    teryt_gmina: Optional[str] = Query(default=None, description="Exact 7-digit TERYT gmina code."),
+    designation: Optional[str] = Query(default=None, description="Filter by dominant designation or dominant future signal."),
+    search: Optional[str] = Query(default=None, description="Text search over parcel identifier, notes, source URL, and dominant future signal."),
     db: AsyncSession = Depends(get_db),
 ) -> LeadsFeatureCollection:
     """Return investment leads as a Mapbox-ready GeoJSON FeatureCollection.
@@ -392,8 +474,10 @@ async def list_leads(
     never touches coordinates.
     """
     logger.info(
-        "[leads] GET /leads min_score=%.2f limit=%d include_count=%s status_filter=%s strategy_filter=%s confidence_band_filter=%s cheap_only=%s",
+        "[leads] GET /leads min_score=%.2f limit=%d include_count=%s status_filter=%s strategy_filter=%s confidence_band_filter=%s cheap_only=%s price=%s..%s price_m2=%s..%s area=%s..%s coverage>=%s buildable>=%s teryt_prefix=%s teryt_gmina=%s designation=%s search=%s",
         min_score, limit, include_count, status_filter, strategy_filter or strategy_type, confidence_band_filter or confidence_band, cheap_only,
+        min_price_zl, max_price_zl, min_price_per_m2_zl, max_price_per_m2_zl, min_area_m2, max_area_m2, min_coverage_pct, min_buildable_area_m2,
+        teryt_prefix, teryt_gmina, designation, search,
     )
 
     normalized_status_filter = status_filter.strip().lower() if status_filter else None
@@ -403,6 +487,10 @@ async def list_leads(
     normalized_confidence_band_filter = (
         raw_confidence_band_filter.strip().lower() if raw_confidence_band_filter else None
     )
+    normalized_teryt_prefix = teryt_prefix.strip() if teryt_prefix else None
+    normalized_teryt_gmina = teryt_gmina.strip() if teryt_gmina else None
+    normalized_designation = designation.strip() if designation else None
+    normalized_search = search.strip() if search else None
     normalized_strategy_filter = _enforce_future_buildability_flag(
         strategy_filter=normalized_strategy_filter,
         confidence_band_filter=normalized_confidence_band_filter,
@@ -418,6 +506,18 @@ async def list_leads(
             "strategy_filter": normalized_strategy_filter,
             "confidence_band_filter": normalized_confidence_band_filter,
             "cheap_only": cheap_only,
+            "min_price_zl": min_price_zl,
+            "max_price_zl": max_price_zl,
+            "min_price_per_m2_zl": min_price_per_m2_zl,
+            "max_price_per_m2_zl": max_price_per_m2_zl,
+            "min_area_m2": min_area_m2,
+            "max_area_m2": max_area_m2,
+            "min_coverage_pct": min_coverage_pct,
+            "min_buildable_area_m2": min_buildable_area_m2,
+            "teryt_prefix": normalized_teryt_prefix,
+            "teryt_gmina": normalized_teryt_gmina,
+            "designation": normalized_designation,
+            "search": normalized_search,
         },
     )
     rows = result.mappings().all()
@@ -534,11 +634,23 @@ async def list_leads(
             {
                 "min_score": min_score,
                 "status_filter": normalized_status_filter,
-                "strategy_filter": normalized_strategy_filter,
-                "confidence_band_filter": normalized_confidence_band_filter,
-                "cheap_only": cheap_only,
-            },
-        )
+            "strategy_filter": normalized_strategy_filter,
+            "confidence_band_filter": normalized_confidence_band_filter,
+            "cheap_only": cheap_only,
+            "min_price_zl": min_price_zl,
+            "max_price_zl": max_price_zl,
+            "min_price_per_m2_zl": min_price_per_m2_zl,
+            "max_price_per_m2_zl": max_price_per_m2_zl,
+            "min_area_m2": min_area_m2,
+            "max_area_m2": max_area_m2,
+            "min_coverage_pct": min_coverage_pct,
+            "min_buildable_area_m2": min_buildable_area_m2,
+            "teryt_prefix": normalized_teryt_prefix,
+            "teryt_gmina": normalized_teryt_gmina,
+            "designation": normalized_designation,
+            "search": normalized_search,
+        },
+    )
         count = count_result.scalar_one()
 
     logger.info(
@@ -567,6 +679,18 @@ async def get_lead(
             "strategy_filter": None,
             "confidence_band_filter": None,
             "cheap_only": False,
+            "min_price_zl": None,
+            "max_price_zl": None,
+            "min_price_per_m2_zl": None,
+            "max_price_per_m2_zl": None,
+            "min_area_m2": None,
+            "max_area_m2": None,
+            "min_coverage_pct": None,
+            "min_buildable_area_m2": None,
+            "teryt_prefix": None,
+            "teryt_gmina": None,
+            "designation": None,
+            "search": None,
             "lead_id": lead_id,
         },
     )

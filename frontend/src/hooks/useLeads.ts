@@ -16,8 +16,9 @@ import type {
   LeadStatusUpdateResponse,
   MarketBenchmarkResponse,
 } from '../types/api';
+import { buildApiPath } from '../lib/apiBase';
 
-const BASE_URL = '/api/v1';
+const BASE_URL = buildApiPath('/api/v1');
 
 async function fetchLeads(params: LeadsQueryParams): Promise<LeadsFeatureCollection> {
   const { data } = await axios.get<LeadsFeatureCollection>(`${BASE_URL}/leads`, {
@@ -28,6 +29,18 @@ async function fetchLeads(params: LeadsQueryParams): Promise<LeadsFeatureCollect
       ...(params.strategy_filter ? { strategy_filter: params.strategy_filter } : {}),
       ...(params.confidence_band_filter ? { confidence_band_filter: params.confidence_band_filter } : {}),
       ...(params.cheap_only ? { cheap_only: true } : {}),
+      ...(params.min_price_zl != null ? { min_price_zl: params.min_price_zl } : {}),
+      ...(params.max_price_zl != null ? { max_price_zl: params.max_price_zl } : {}),
+      ...(params.min_price_per_m2_zl != null ? { min_price_per_m2_zl: params.min_price_per_m2_zl } : {}),
+      ...(params.max_price_per_m2_zl != null ? { max_price_per_m2_zl: params.max_price_per_m2_zl } : {}),
+      ...(params.min_area_m2 != null ? { min_area_m2: params.min_area_m2 } : {}),
+      ...(params.max_area_m2 != null ? { max_area_m2: params.max_area_m2 } : {}),
+      ...(params.min_coverage_pct != null ? { min_coverage_pct: params.min_coverage_pct } : {}),
+      ...(params.min_buildable_area_m2 != null ? { min_buildable_area_m2: params.min_buildable_area_m2 } : {}),
+      ...(params.teryt_prefix ? { teryt_prefix: params.teryt_prefix } : {}),
+      ...(params.teryt_gmina ? { teryt_gmina: params.teryt_gmina } : {}),
+      ...(params.designation ? { designation: params.designation } : {}),
+      ...(params.search ? { search: params.search } : {}),
       ...(params.include_count ? { include_count: true } : {}),
     },
   });

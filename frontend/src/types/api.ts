@@ -90,6 +90,8 @@ export interface LeadProperties {
   future_signal_score: number | null;
   cheapness_score: number | null;
   overall_score: number | null;
+  signal_quality_tier: 'formal' | 'supported' | 'below_threshold' | 'blocked' | null;
+  next_best_action: string | null;
   dominant_future_signal: string | null;
   future_signal_count: number | null;
   distance_to_nearest_buildable_m: number | null;
@@ -124,6 +126,18 @@ export interface LeadsQueryParams {
   strategy_filter?: LeadStrategyType;
   confidence_band_filter?: FutureConfidenceBand;
   cheap_only?: boolean;
+  min_price_zl?: number;
+  max_price_zl?: number;
+  min_price_per_m2_zl?: number;
+  max_price_per_m2_zl?: number;
+  min_area_m2?: number;
+  max_area_m2?: number;
+  min_coverage_pct?: number;
+  min_buildable_area_m2?: number;
+  teryt_prefix?: string;
+  teryt_gmina?: string;
+  designation?: string;
+  search?: string;
 }
 
 export interface LeadStatusUpdatePayload {

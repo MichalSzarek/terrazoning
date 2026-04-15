@@ -3,13 +3,12 @@
  * Clicking a row: selects the lead, map highlights the parcel, detail view opens.
  */
 
-import { MapPin, TrendingUp, AlertCircle } from 'lucide-react';
+import { MapPin, TrendingUp, AlertCircle, ArrowRight } from 'lucide-react';
 import type { LeadFeature } from '../../types/api';
 import { ConfidenceBadge } from '../ui/ConfidenceBadge';
 import { useMapStore } from '../../store/mapStore';
 import {
   classifyPriceSignal,
-  describeCheapnessScore,
   formatAreaCompact,
   formatCurrencyPln,
   formatInvestmentScore,
@@ -78,6 +77,9 @@ function LeadRow({ feature, isSelected, onSelect, onMouseEnter, onMouseLeave }: 
   const headlineMetric = getLeadHeadlineMetric(p);
   const priceSignal = classifyPriceSignal(p);
   const futureInsight = p.strategy_type === 'future_buildable' ? getFutureLeadInsight(p) : null;
+  const dominantInsight = p.strategy_type === 'future_buildable'
+    ? (p.dominant_future_signal ?? p.next_best_action ?? 'czeka na kolejny sygnał planistyczny')
+    : (p.dominant_przeznaczenie ?? 'obowiązująca funkcja budowlana');
 
   return (
     <button
@@ -93,35 +95,23 @@ function LeadRow({ feature, isSelected, onSelect, onMouseEnter, onMouseLeave }: 
       aria-pressed={isSelected}
       aria-label={`Działka ${p.identyfikator}, confidence ${Math.round(p.confidence_score * 100)}%`}
     >
-      <div className="flex items-start justify-between gap-2">
+      <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
-          <div className="flex items-start justify-between gap-2">
-            <p className="truncate font-mono text-xs text-gray-300 leading-tight">
+          <div className="flex flex-wrap items-start gap-2">
+            <p className="truncate font-mono text-[12px] font-semibold text-gray-100 leading-tight">
               {p.identyfikator}
             </p>
-            <span className="rounded-md border border-emerald-500/20 bg-emerald-500/10 px-1.5 py-0.5 text-[10px] font-medium text-emerald-300">
-              {headlineMetric}
+            <span className={`rounded-full border px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider ${
+              p.strategy_type === 'future_buildable'
+                ? 'border-sky-500/30 bg-sky-500/10 text-sky-200'
+                : 'border-emerald-500/30 bg-emerald-500/10 text-emerald-200'
+            }`}>
+              {p.strategy_type === 'future_buildable' ? 'future' : 'current'}
             </span>
-          </div>
-          <div className="mt-1 flex items-center gap-2 text-[11px] text-gray-500">
-            <span className="flex items-center gap-0.5">
-              <MapPin size={9} aria-hidden />
-              {p.teryt_gmina}
-            </span>
-            <span>·</span>
-            <span>{formattedArea}</span>
-            {buildableArea != null && (
-              <>
-                <span>·</span>
-                <span className="text-amber-500">{formatAreaCompact(buildableArea)} build.</span>
-              </>
-            )}
-          </div>
-          <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-gray-500">
             {p.confidence_band && (
               <span
                 className={[
-                  'rounded border px-1.5 py-0.5 text-[10px] uppercase tracking-wider',
+                  'rounded-full border px-2 py-0.5 text-[10px] uppercase tracking-wider',
                   p.confidence_band === 'formal'
                     ? 'border-sky-400/30 bg-sky-400/10 text-sky-200'
                     : p.confidence_band === 'supported'
@@ -132,25 +122,51 @@ function LeadRow({ feature, isSelected, onSelect, onMouseEnter, onMouseLeave }: 
                 {getConfidenceBandLabel(p.confidence_band)}
               </span>
             )}
-            <span className="rounded border border-gray-700 bg-gray-900 px-1.5 py-0.5 text-[10px] uppercase tracking-wider text-gray-400">
+            <span className="rounded-full border border-gray-700 bg-gray-900 px-2 py-0.5 text-[10px] uppercase tracking-wider text-gray-400">
               {p.status}
             </span>
-            <span className="rounded border border-cyan-500/20 bg-cyan-500/10 px-1.5 py-0.5 text-[10px] font-medium text-cyan-200">
+          </div>
+
+          <div className="mt-2 flex flex-wrap items-end gap-x-4 gap-y-2">
+            <div>
+              <div className="text-[10px] uppercase tracking-wider text-gray-500">cena całkowita</div>
+              <div className="text-lg font-semibold leading-none text-gray-100">
+                {formatCurrencyPln(p.price_zl, { compact: true })}
+              </div>
+            </div>
+            <div className="text-[11px] text-gray-400">
+              <div>{headlineMetric}</div>
+              <div className="mt-1 flex items-center gap-1 text-gray-500">
+                <MapPin size={10} aria-hidden />
+                {p.teryt_gmina}
+              </div>
+            </div>
+            <div className="text-[11px] text-gray-400">
+              <div>{formattedArea}</div>
+              <div className="mt-1 text-gray-500">
+                {buildableArea != null ? `${formatAreaCompact(buildableArea)} build.` : 'brak buildable area'}
+              </div>
+            </div>
+            <div className="text-[11px] text-gray-400">
+              <div>{p.max_coverage_pct != null ? `${p.max_coverage_pct.toFixed(0)}% pokrycia` : 'brak coverage'}</div>
+              <div className="mt-1 text-gray-500">{p.dominant_przeznaczenie ?? 'bez designation'}</div>
+            </div>
+          </div>
+
+          <div className="mt-3 flex flex-wrap items-center gap-2 text-[11px] text-gray-500">
+            <span className="rounded-full border border-cyan-500/20 bg-cyan-500/10 px-2 py-0.5 text-[10px] font-medium text-cyan-200">
               score {formatInvestmentScore(p.investment_score)}
             </span>
             {p.strategy_type === 'future_buildable' && p.cheapness_score != null && (
-              <span className="rounded border border-emerald-500/20 bg-emerald-500/10 px-1.5 py-0.5 text-[10px] font-medium text-emerald-200">
-                cheapness {p.cheapness_score.toFixed(0)}/20 · {describeCheapnessScore(p.cheapness_score)}
+              <span className="rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-medium text-emerald-200">
+                cheapness {p.cheapness_score.toFixed(0)}/20
               </span>
-            )}
-            {p.dominant_future_signal && (
-              <span className="text-sky-300">{p.dominant_future_signal}</span>
             )}
             {futureInsight && (
               <>
                 <span
                   className={[
-                    'rounded border px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wider',
+                    'rounded-full border px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider',
                     futureInsight.evidenceTierTone === 'formal'
                       ? 'border-sky-400/30 bg-sky-400/10 text-sky-200'
                       : futureInsight.evidenceTierTone === 'supported'
@@ -163,29 +179,14 @@ function LeadRow({ feature, isSelected, onSelect, onMouseEnter, onMouseLeave }: 
                 >
                   {futureInsight.evidenceTierLabel}
                 </span>
-                <span
-                  className="rounded border border-amber-500/20 bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-medium text-amber-200"
-                  title={futureInsight.nextActionHint}
-                >
-                  {futureInsight.nextActionLabel}
-                </span>
                 <span className="text-gray-500" title={futureInsight.spatialContextHint}>
                   {futureInsight.spatialContextLabel}
                 </span>
               </>
             )}
-            {p.dominant_przeznaczenie && (
-              <span className="font-mono text-amber-500">{p.dominant_przeznaczenie}</span>
-            )}
-            {p.max_coverage_pct != null && (
-              <span>pokrycie {p.max_coverage_pct.toFixed(0)}%</span>
-            )}
-            {p.price_zl != null && (
-              <span>{formatCurrencyPln(p.price_zl, { compact: true })}</span>
-            )}
             <span
               className={[
-                'rounded px-1.5 py-0.5 text-[10px] font-medium',
+                'rounded-full px-2 py-0.5 text-[10px] font-medium',
                 priceSignal === 'reliable'
                   ? 'bg-emerald-500/10 text-emerald-300'
                   : priceSignal === 'suspicious'
@@ -195,23 +196,30 @@ function LeadRow({ feature, isSelected, onSelect, onMouseEnter, onMouseLeave }: 
             >
               {priceSignalLabel(priceSignal)}
             </span>
-            {p.quality_signal !== 'complete' && (
-              <span className="rounded bg-gray-800 px-1.5 py-0.5 text-[10px] font-medium text-gray-300">
-                {p.quality_signal === 'missing_financials'
-                  ? 'brak finansów'
-                  : p.quality_signal === 'review_required'
-                    ? 'wymaga weryfikacji'
-                    : 'metryki częściowe'}
-              </span>
-            )}
           </div>
-          {p.notes && (
-            <p className="mt-1 truncate text-[11px] text-gray-500">
-              {p.notes}
-            </p>
-          )}
+
+          <div className="mt-3 flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <p className="truncate text-[11px] text-gray-300">
+                {dominantInsight}
+              </p>
+              <p className="mt-1 truncate text-[11px] text-gray-500">
+                {p.next_best_action ?? (p.strategy_type === 'future_buildable'
+                  ? 'sprawdź źródło planistyczne i porównaj z aukcją'
+                  : 'otwórz szczegóły i zweryfikuj operat')}
+              </p>
+              {p.notes && (
+                <p className="mt-1 truncate text-[11px] text-gray-600">{p.notes}</p>
+              )}
+            </div>
+            <span className="inline-flex items-center gap-1 text-[11px] text-amber-300">
+              szczegóły
+              <ArrowRight size={12} aria-hidden />
+            </span>
+          </div>
+
           {p.max_coverage_pct != null && (
-            <div className="mt-1.5 h-0.5 w-full rounded-full bg-gray-700">
+            <div className="mt-2 h-1 w-full rounded-full bg-gray-800">
               <div
                 className="h-full rounded-full bg-amber-500 transition-all"
                 style={{ width: `${Math.min(p.max_coverage_pct, 100)}%` }}
@@ -274,14 +282,14 @@ export function LeadList({ features, isLoading, error }: LeadListProps) {
     <div role="list" aria-label="Lista leadów inwestycyjnych">
       {sections.map((section) => (
         <section key={section.key} className="border-b border-gray-800 last:border-b-0">
-          <div className="flex items-start justify-between gap-3 px-4 py-3">
-            <div className="min-w-0">
-              <p
-                className={[
-                  'text-[11px] font-semibold uppercase tracking-wider',
-                  section.tone === 'sky' ? 'text-sky-300' : 'text-emerald-300',
-                ].join(' ')}
-              >
+      <div className="flex items-start justify-between gap-3 px-4 py-3">
+        <div className="min-w-0">
+          <p
+            className={[
+              'text-[11px] font-semibold uppercase tracking-[0.18em]',
+              section.tone === 'sky' ? 'text-sky-300' : 'text-emerald-300',
+            ].join(' ')}
+          >
                 {section.title}
               </p>
               <p className="mt-1 text-[11px] text-gray-500">{section.description}</p>

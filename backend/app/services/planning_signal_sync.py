@@ -18,7 +18,7 @@ from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.gold import PlanningSignal, PlanningZone
-from app.services.planning_signal_utils import normalize_designation_class, score_signal
+from app.services.planning_signal_utils import POSITIVE_DESIGNATIONS, normalize_designation_class, score_signal
 
 logger = logging.getLogger(__name__)
 
@@ -26,7 +26,7 @@ _PLAN_TYPE_SIGNAL_KIND = {
     "pog": ("pog_zone", "formal_directional"),
     "studium": ("studium_zone", "formal_directional"),
 }
-_SIGNAL_SYNC_SOURCE_TYPES = ("planning_zone_passthrough", "html_index")
+_SIGNAL_SYNC_SOURCE_TYPES = ("planning_zone_passthrough", "html_index", "pdf")
 _HTML_TAG_RE = re.compile(r"<[^>]+>")
 _HTML_ERROR_TEXT_RE = re.compile(r"błąd połączenia|blad polaczenia|connection error", flags=re.IGNORECASE)
 _PLANNING_PAGE_SIGNAL_PATTERNS: tuple[tuple[re.Pattern[str], str], ...] = (
@@ -119,6 +119,38 @@ _HTML_INDEX_HEADERS = {
 }
 
 
+def _is_ssl_certificate_error(exc: Exception) -> bool:
+    message = str(exc).upper()
+    return "CERTIFICATE_VERIFY_FAILED" in message or "CERTIFICATE VERIFY FAILED" in message
+
+
+async def _fetch_source_response(
+    source_url: str,
+    *,
+    headers: dict[str, str],
+) -> httpx.Response:
+    request_kwargs = {
+        "timeout": httpx.Timeout(20.0),
+        "follow_redirects": True,
+    }
+    try:
+        async with httpx.AsyncClient(**request_kwargs) as client:
+            response = await client.get(source_url, headers=headers)
+            response.raise_for_status()
+            return response
+    except httpx.ConnectError as exc:
+        if not _is_ssl_certificate_error(exc):
+            raise
+        logger.warning(
+            "[PlanningSignalSync] retrying %s with TLS verification disabled due to certificate error",
+            source_url,
+        )
+        async with httpx.AsyncClient(verify=False, **request_kwargs) as client:
+            response = await client.get(source_url, headers=headers)
+            response.raise_for_status()
+            return response
+
+
 @dataclass(frozen=True)
 class HtmlIndexSignalSource:
     teryt_gmina: str
@@ -184,6 +216,30 @@ _HTML_INDEX_SIGNAL_REGISTRY: tuple[HtmlIndexSignalSource, ...] = (
         source_confidence=Decimal("0.88"),
     ),
     HtmlIndexSignalSource(
+        teryt_gmina="2406092",
+        source_url="https://www.wreczyca-wielka.pl/aktualnosc-281-obwieszczenie_o_przystapieniu_do.html",
+        label="Wręczyca Wielka Obwieszczenie o przystąpieniu do planu ogólnego",
+        source_confidence=Decimal("0.90"),
+    ),
+    HtmlIndexSignalSource(
+        teryt_gmina="2406092",
+        source_url="https://www.bip.wreczyca-wielka.akcessnet.net/upload/20180119081806odmqcs0uipum.pdf",
+        label="Wręczyca Wielka Studium 2017 PDF",
+        source_confidence=Decimal("0.90"),
+    ),
+    HtmlIndexSignalSource(
+        teryt_gmina="2406092",
+        source_url="https://www.bip.wreczyca-wielka.akcessnet.net/upload/20170607123606h7nz89qvgekf.pdf",
+        label="Wręczyca Wielka Studium 2016 PDF",
+        source_confidence=Decimal("0.88"),
+    ),
+    HtmlIndexSignalSource(
+        teryt_gmina="2406092",
+        source_url="https://www.bip.wreczyca-wielka.akcessnet.net/upload/plik%2C20250828213836%2Cuzasadnienie_do_planu_ogolnego_gminy_wreczyca_wielka.pdf",
+        label="Wręczyca Wielka uzasadnienie planu ogólnego PDF",
+        source_confidence=Decimal("0.92"),
+    ),
+    HtmlIndexSignalSource(
         teryt_gmina="2414021",
         source_url="https://imielin.e-mapa.net/wykazplanow/",
         label="Imielin Rejestr urbanistyczny",
@@ -193,6 +249,18 @@ _HTML_INDEX_SIGNAL_REGISTRY: tuple[HtmlIndexSignalSource, ...] = (
         source_url="https://www.imielin.pl/pl/205/7551/plan-ogolny-miasta.html",
         label="Imielin Plan Ogólny Miasta - Aktualności",
         source_confidence=Decimal("0.88"),
+    ),
+    HtmlIndexSignalSource(
+        teryt_gmina="2414021",
+        source_url="https://bip.imielin.pl/pl/2350/0/plan-ogolny.html",
+        label="Imielin Plan ogólny - BIP",
+        source_confidence=Decimal("0.90"),
+    ),
+    HtmlIndexSignalSource(
+        teryt_gmina="2414021",
+        source_url="https://bip.imielin.pl/mfiles/2369/28/0/z/uzasadnienie-do-planu-og-lnego.pdf",
+        label="Imielin POG uzasadnienie PDF",
+        source_confidence=Decimal("0.92"),
     ),
     HtmlIndexSignalSource(
         teryt_gmina="2416085",
@@ -206,10 +274,76 @@ _HTML_INDEX_SIGNAL_REGISTRY: tuple[HtmlIndexSignalSource, ...] = (
         source_confidence=Decimal("0.84"),
     ),
     HtmlIndexSignalSource(
+        teryt_gmina="2416085",
+        source_url="https://mapa.inspire-hub.pl/upload/141_XXI_2016_SUiKZP_tekst__szczekociny.pdf?action_type=3",
+        label="Szczekociny Studium tekst uchwały PDF",
+        source_confidence=Decimal("0.88"),
+    ),
+    HtmlIndexSignalSource(
+        teryt_gmina="2416085",
+        source_url="https://bip.szczekociny.pl/res/serwisy/pliki/13447905?version=1.0",
+        label="Szczekociny Studium tekst jednolity - tom I",
+        source_confidence=Decimal("0.90"),
+    ),
+    HtmlIndexSignalSource(
+        teryt_gmina="2416085",
+        source_url="https://bip.szczekociny.pl/res/serwisy/pliki/13447918?version=1.0",
+        label="Szczekociny Studium tekst jednolity - tom II",
+        source_confidence=Decimal("0.90"),
+    ),
+    HtmlIndexSignalSource(
+        teryt_gmina="2416085",
+        source_url="https://bip.szczekociny.pl/res/serwisy/pliki/42216826?version=1.0",
+        label="Szczekociny POG GML",
+        source_confidence=Decimal("0.94"),
+    ),
+    HtmlIndexSignalSource(
+        teryt_gmina="2416085",
+        source_url="https://bip.szczekociny.pl/res/serwisy/pliki/42216838?version=1.0",
+        label="Szczekociny POG uzasadnienie PDF",
+        source_confidence=Decimal("0.92"),
+    ),
+    HtmlIndexSignalSource(
         teryt_gmina="2412014",
         source_url="https://bip.czerwionka-leszczyny.pl/informacje_urzedu/plan-ogolny-gminy-i-miasta-czerwionka-leszczyny-pog",
         label="Czerwionka-Leszczyny Plan ogólny - BIP",
         source_confidence=Decimal("0.88"),
+    ),
+    HtmlIndexSignalSource(
+        teryt_gmina="2412014",
+        source_url="https://bip.czerwionka-leszczyny.pl/pliki/Uzasadnienie-POG-CZERWIONKA-MARZEC-2026,36998.pdf",
+        label="Czerwionka-Leszczyny POG - uzasadnienie",
+        source_confidence=Decimal("0.92"),
+    ),
+    HtmlIndexSignalSource(
+        teryt_gmina="2412014",
+        source_url="https://bip.czerwionka-leszczyny.pl/pliki/1POG-Czerwionka-Leszczyny-30-03-2026,37000.gml",
+        label="Czerwionka-Leszczyny POG - GML projekt",
+        source_confidence=Decimal("0.94"),
+    ),
+    HtmlIndexSignalSource(
+        teryt_gmina="2405011",
+        source_url="https://www.knurow.pl/miasto-knurow/ogloszenia-urzedu/OBWIESZCZENIE-PREZYDENTA-MIASTA-KNUROW-z-dnia-7-marca-2024-r/idn:4390",
+        label="Knurów Obwieszczenie o zmianie MPZP Szpitalna i 26 Stycznia",
+        source_confidence=Decimal("0.90"),
+    ),
+    HtmlIndexSignalSource(
+        teryt_gmina="2405011",
+        source_url="https://www.knurow.pl/download/Uzasadnienie,812.pdf",
+        label="Knurów Uzasadnienie zmiany MPZP Szpitalna i 26 Stycznia",
+        source_confidence=Decimal("0.92"),
+    ),
+    HtmlIndexSignalSource(
+        teryt_gmina="2405011",
+        source_url="https://www.knurow.pl/miasto-knurow/ogloszenia-urzedu/Obwieszczenie-Prezydenta-Miasta-Knurow/idn:5841",
+        label="Knurów Obwieszczenie o przyjęciu MPZP Szpitalna",
+        source_confidence=Decimal("0.92"),
+    ),
+    HtmlIndexSignalSource(
+        teryt_gmina="2405011",
+        source_url="https://www.knurow.pl/download/Uchwala-XV_165_2025-RM-Knurow,1182.pdf",
+        label="Knurów Uchwała XV/165/2025 MPZP Szpitalna",
+        source_confidence=Decimal("0.94"),
     ),
     HtmlIndexSignalSource(
         teryt_gmina="2414042",
@@ -224,6 +358,24 @@ _HTML_INDEX_SIGNAL_REGISTRY: tuple[HtmlIndexSignalSource, ...] = (
         source_confidence=Decimal("0.90"),
     ),
     HtmlIndexSignalSource(
+        teryt_gmina="2469011",
+        source_url="https://www.katowice.eu/plan-ogolny",
+        label="Katowice Plan ogólny",
+        source_confidence=Decimal("0.90"),
+    ),
+    HtmlIndexSignalSource(
+        teryt_gmina="2469011",
+        source_url="https://bip.katowice.eu/Lists/Dokumenty/Attachments/150551/Uzasadnienie%20do%20projektu%20POG%20Katowice%20-%20Etap%20opiniowania%20i%20uzgodnie%C5%84.pdf",
+        label="Katowice POG uzasadnienie PDF",
+        source_confidence=Decimal("0.92"),
+    ),
+    HtmlIndexSignalSource(
+        teryt_gmina="2469011",
+        source_url="https://bip.katowice.eu/PublishingImages/Planowanie%20Przestrzenne/tekst%20Studium%20cz%C4%99%C5%9B%C4%87%201%20-%20Uwarunkowania%20zagospodarowania%20przestrzennego.pdf",
+        label="Katowice Studium tekst PDF",
+        source_confidence=Decimal("0.90"),
+    ),
+    HtmlIndexSignalSource(
         teryt_gmina="1201065",
         source_url="https://nowywisnicz.e-mapa.net/wykazplanow/",
         label="Nowy Wiśnicz Rejestr urbanistyczny",
@@ -233,6 +385,246 @@ _HTML_INDEX_SIGNAL_REGISTRY: tuple[HtmlIndexSignalSource, ...] = (
         source_url="https://nowywisnicz.pl/aktualnosci/planowanie-przestrzenne/",
         label="Nowy Wiśnicz Planowanie przestrzenne",
         source_confidence=Decimal("0.84"),
+    ),
+    HtmlIndexSignalSource(
+        teryt_gmina="1201065",
+        source_url="https://nowywisnicz.e-mapa.net/implementation/nowywisnicz/pln/pelna_tresc/000.pdf",
+        label="Nowy Wiśnicz Studium tekst uchwały PDF",
+        source_confidence=Decimal("0.88"),
+    ),
+    HtmlIndexSignalSource(
+        teryt_gmina="1206152",
+        source_url="https://www.wielka-wies.pl/o-gminie/aktualnosci/ogloszenie-plan-ogolny/",
+        label="Wielka Wieś Ogłoszenie plan ogólny",
+        source_confidence=Decimal("0.90"),
+    ),
+    HtmlIndexSignalSource(
+        teryt_gmina="1206152",
+        source_url="https://wielka-wies.geoportal-krajowy.pl/plan-ogolny",
+        label="Wielka Wieś Geoportal plan ogólny",
+        source_confidence=Decimal("0.90"),
+    ),
+    HtmlIndexSignalSource(
+        teryt_gmina="1206152",
+        source_url="https://old.wielka-wies.pl/media/191132/zal-1-wielka-wies-studium-tekst-ujednolicony.pdf",
+        label="Wielka Wieś Studium tekst PDF",
+        source_confidence=Decimal("0.90"),
+    ),
+    HtmlIndexSignalSource(
+        teryt_gmina="1203034",
+        source_url="https://www.chrzanow.pl/gmina/planowanie-przestrzenne/plan-ogolny",
+        label="Chrzanów Plan ogólny",
+        source_confidence=Decimal("0.90"),
+    ),
+    HtmlIndexSignalSource(
+        teryt_gmina="1203034",
+        source_url="https://chrzanow.geoportal-krajowy.pl/plan-ogolny",
+        label="Chrzanów Geoportal plan ogólny",
+        source_confidence=Decimal("0.90"),
+    ),
+    HtmlIndexSignalSource(
+        teryt_gmina="1203034",
+        source_url="https://www.chrzanow.pl/gmina/planowanie-przestrzenne/plany-zagospodarowania---projekty",
+        label="Chrzanów Plany zagospodarowania - projekty",
+        source_confidence=Decimal("0.90"),
+    ),
+    HtmlIndexSignalSource(
+        teryt_gmina="1203034",
+        source_url="https://www.chrzanow.pl/aktualnosci/plan-ogolny-gminy-chrzanow--mozna-skladac-wnioski%2C2737",
+        label="Chrzanów Plan ogólny - składanie wniosków",
+        source_confidence=Decimal("0.92"),
+    ),
+    HtmlIndexSignalSource(
+        teryt_gmina="1203034",
+        source_url="https://www.chrzanow.pl/gmina/planowanie-przestrzenne/plany-zagospodarowania---projekty/projekt-zmiany-mpzp-dla-terenu-gorniczego-babice-i",
+        label="Chrzanów Projekt zmiany MPZP Babice I",
+        source_confidence=Decimal("0.92"),
+    ),
+    HtmlIndexSignalSource(
+        teryt_gmina="1203034",
+        source_url="https://www.chrzanow.pl/storage/file/core_files/2024/3/18/52f16e1503ab2ccac845e1e91f12e2aa/Protok%C3%B3%C5%82%20z%20dyskusji%20publicznej_2024.pdf",
+        label="Chrzanów Protokół dyskusji publicznej PDF",
+        source_confidence=Decimal("0.92"),
+    ),
+    HtmlIndexSignalSource(
+        teryt_gmina="1205092",
+        source_url="https://www.sekowa.pl/strefa_mieszkanca/ogloszenie-o-zamieszczeniu-danych-o-projekcie-zmiany-miejscowego-planu-zagospodarowania-przestrzennego-gminy-sekowa/",
+        label="Sękowa Projekt zmiany MPZP",
+        source_confidence=Decimal("0.90"),
+    ),
+    HtmlIndexSignalSource(
+        teryt_gmina="1205092",
+        source_url="https://www.sekowa.pl/strefa_mieszkanca/ogloszenie-wojta-gminy-sekowa-z-dnia-30-stycznia-2025-r-o-przystapieniu-do-sporzadzenia-zmiany-miejscowego-planu-zagospodarowania-przestrzennego-gminy-sekowa/",
+        label="Sękowa Obwieszczenie o zmianie MPZP",
+        source_confidence=Decimal("0.90"),
+    ),
+    HtmlIndexSignalSource(
+        teryt_gmina="1205092",
+        source_url="https://www.sekowa.pl/plan-zagospodarowania-przestrzennego/",
+        label="Sękowa Plan zagospodarowania przestrzennego",
+        source_confidence=Decimal("0.90"),
+    ),
+    HtmlIndexSignalSource(
+        teryt_gmina="1210062",
+        source_url="https://rastry.gison.pl/mpzp-public/korzenna/uchwaly/U_2018_375_XXXIV_studium_tekst.pdf",
+        label="Korzenna Studium tekst PDF",
+        source_confidence=Decimal("0.90"),
+    ),
+    HtmlIndexSignalSource(
+        teryt_gmina="1210062",
+        source_url="https://www.korzenna.pl/plan-ogolny-zamiast-studium-uwarunkowan-wnioski-do-27-grudnia/",
+        label="Korzenna Plan ogólny zamiast studium",
+        source_confidence=Decimal("0.88"),
+    ),
+    HtmlIndexSignalSource(
+        teryt_gmina="1210062",
+        source_url="https://www.korzenna.pl/setki-wnioskow-do-planu-gminy/",
+        label="Korzenna Setki wniosków do planu gminy",
+        source_confidence=Decimal("0.88"),
+    ),
+    HtmlIndexSignalSource(
+        teryt_gmina="1210062",
+        source_url="https://www.korzenna.pl/blog/2024/12/13/informacja-o-nieobowiazywaniu-zapisow-studium-w-planie-ogolnym-gminy-korzenna/",
+        label="Korzenna Informacja o nieobowiązywaniu studium",
+        source_confidence=Decimal("0.86"),
+    ),
+    HtmlIndexSignalSource(
+        teryt_gmina="1206022",
+        source_url="https://igolomia-wawrzenczyce.geoportal-krajowy.pl/plan-ogolny",
+        label="Igołomia-Wawrzeńczyce Geoportal plan ogólny",
+        source_confidence=Decimal("0.90"),
+    ),
+    HtmlIndexSignalSource(
+        teryt_gmina="1206032",
+        source_url="https://www.iwanowice.pl/dla-mieszkanca/plan-ogolny-gminy-iwanowice/",
+        label="Iwanowice Plan ogólny",
+        source_confidence=Decimal("0.90"),
+    ),
+    HtmlIndexSignalSource(
+        teryt_gmina="1206032",
+        source_url="https://www.iwanowice.pl/zapuveer/2024/09/SUiKZP_Iwanowice_Zalacznik_2_Ustalenia_2024-09.pdf.pdf",
+        label="Iwanowice Studium ustalenia PDF",
+        source_confidence=Decimal("0.92"),
+    ),
+    HtmlIndexSignalSource(
+        teryt_gmina="1206032",
+        source_url="https://www.iwanowice.pl/zapuveer/2024/09/SUiKZP_Iwanowice_Zalacznik_1_Uwarunkowania_2024-09.pdf.pdf",
+        label="Iwanowice Studium uwarunkowania PDF",
+        source_confidence=Decimal("0.88"),
+    ),
+    HtmlIndexSignalSource(
+        teryt_gmina="1206032",
+        source_url="https://iwanowice.geoportal-krajowy.pl/plan-ogolny",
+        label="Iwanowice Geoportal plan ogólny",
+        source_confidence=Decimal("0.90"),
+    ),
+    HtmlIndexSignalSource(
+        teryt_gmina="1206032",
+        source_url="https://www.iwanowice.pl/ogloszenie-wojta-iwanowice-projekt-zmiany-studium/",
+        label="Iwanowice ogłoszenie o projekcie zmiany studium",
+        source_confidence=Decimal("0.88"),
+    ),
+    HtmlIndexSignalSource(
+        teryt_gmina="1206032",
+        source_url="https://iwanowice.pl/wp-content/uploads/2021/11/MPZP_TEKS.pdf",
+        label="Iwanowice MPZP tekst PDF",
+        source_confidence=Decimal("0.90"),
+    ),
+    HtmlIndexSignalSource(
+        teryt_gmina="1206105",
+        source_url="https://skala.pl/studium/",
+        label="Skała Studium",
+        source_confidence=Decimal("0.90"),
+    ),
+    HtmlIndexSignalSource(
+        teryt_gmina="1206105",
+        source_url="https://skala.pl/wp-content/uploads/2024/01/13_KIERUNKI_SKALA_wylozenie.pdf",
+        label="Skała Kierunki studium PDF",
+        source_confidence=Decimal("0.92"),
+    ),
+    HtmlIndexSignalSource(
+        teryt_gmina="1206105",
+        source_url="https://skala.geoportal-krajowy.pl/plan-ogolny",
+        label="Skała Geoportal plan ogólny",
+        source_confidence=Decimal("0.90"),
+    ),
+    HtmlIndexSignalSource(
+        teryt_gmina="1206105",
+        source_url="https://skala.pl/dokumenty/plan-zagospodarowania/",
+        label="Skała Plan zagospodarowania",
+        source_confidence=Decimal("0.90"),
+    ),
+    HtmlIndexSignalSource(
+        teryt_gmina="1206105",
+        source_url="https://skala.pl/obwieszczenie-burmistrza-miasta-i-gminy-skala-o-wylozeniu-do-publicznego-wgladu-projektu-studium-uwarunkowan-i-kierunkow-zagospodarowania-przestrzennego-21/",
+        label="Skała Obwieszczenie o wyłożeniu studium",
+        source_confidence=Decimal("0.92"),
+    ),
+    HtmlIndexSignalSource(
+        teryt_gmina="1206114",
+        source_url="https://www.gminaskawina.pl/mieszkancy/informacje-praktyczne/miejscowy-plan-zagospodarowania-przestrzennego/studium-uwarunkowan-i-kierunkow-zagospodarowania-przestrzennego-gminy-skawina",
+        label="Skawina Studium",
+        source_confidence=Decimal("0.90"),
+    ),
+    HtmlIndexSignalSource(
+        teryt_gmina="1206114",
+        source_url="https://rastry.gison.pl/mpzp-public/skawina_wylozenie/uchwaly/studium_wylozenie_kierunki.pdf",
+        label="Skawina Studium kierunki PDF",
+        source_confidence=Decimal("0.92"),
+    ),
+    HtmlIndexSignalSource(
+        teryt_gmina="1206114",
+        source_url="https://skawina.geoportal-krajowy.pl/plan-ogolny",
+        label="Skawina Geoportal plan ogólny",
+        source_confidence=Decimal("0.90"),
+    ),
+    HtmlIndexSignalSource(
+        teryt_gmina="1206114",
+        source_url="https://www.gminaskawina.pl/assets/skawina/media/files/8613e3e7-8b67-4c9f-87de-765280dc4049/uchwala-nr-ii-16-24-rady-miejskiej-w-skawinie.pdf",
+        label="Skawina Uchwała MPZP PDF",
+        source_confidence=Decimal("0.92"),
+    ),
+    HtmlIndexSignalSource(
+        teryt_gmina="1206114",
+        source_url="https://www.gminaskawina.pl/mieszkancy/informacje-praktyczne/miejscowy-plan-zagospodarowania-przestrzennego/aktualnosci-gp/2025/ogloszenie-burmistrza-miasta-i-gminy-skawina-za-dnia-13-czerwca-2025-r",
+        label="Skawina Ogłoszenie Burmistrza 13 czerwca 2025",
+        source_confidence=Decimal("0.92"),
+    ),
+    HtmlIndexSignalSource(
+        teryt_gmina="1206114",
+        source_url="https://www.gminaskawina.pl/assets/skawina/media/files/f9ec549d-02d6-4836-9b1a-cef2d2e9de25/projekt-zmiany-mpzp-miasta-skawina-kdd-wylozenie-20-11-2023.pdf",
+        label="Skawina Projekt zmiany MPZP KDD PDF",
+        source_confidence=Decimal("0.92"),
+    ),
+    HtmlIndexSignalSource(
+        teryt_gmina="1206162",
+        source_url="https://zabierzow.geoportal-krajowy.pl/plan-ogolny",
+        label="Zabierzów Geoportal plan ogólny",
+        source_confidence=Decimal("0.90"),
+    ),
+    HtmlIndexSignalSource(
+        teryt_gmina="1206162",
+        source_url="https://zabierzow.org.pl/572-plan-ogolny.html",
+        label="Zabierzów Plan ogólny - portal gminy",
+        source_confidence=Decimal("0.88"),
+    ),
+    HtmlIndexSignalSource(
+        teryt_gmina="1208045",
+        source_url="https://www.ksiazwielki.eu/index.php/dla-mieszkanca/ogloszenia-i-komunikaty/528-ogloszenie-o-rozpoczeciu-konsultacji-spolecznych-projektu-planu-ogolnego-miasta-i-gminy-ksiaz-wielki",
+        label="Książ Wielki konsultacje planu ogólnego",
+        source_confidence=Decimal("0.90"),
+    ),
+    HtmlIndexSignalSource(
+        teryt_gmina="1208045",
+        source_url="https://e-mapa.net/plan_ogolny/120804-ksiaz-wielki",
+        label="Książ Wielki e-mapa plan ogólny",
+        source_confidence=Decimal("0.88"),
+    ),
+    HtmlIndexSignalSource(
+        teryt_gmina="1201065",
+        source_url="https://nowy-wisnicz.geoportal-krajowy.pl/plan-ogolny",
+        label="Nowy Wiśnicz Plan ogólny - Geoportal Krajowy",
+        source_confidence=Decimal("0.88"),
     ),
     HtmlIndexSignalSource(
         teryt_gmina="1218095",
@@ -274,6 +666,42 @@ _HTML_INDEX_SIGNAL_REGISTRY: tuple[HtmlIndexSignalSource, ...] = (
         source_confidence=Decimal("0.86"),
     ),
     HtmlIndexSignalSource(
+        teryt_gmina="1216155",
+        source_url="https://zabno.pl/wp-content/uploads/2024/11/PLAN-Ogolny.pdf",
+        label="Żabno Plan ogólny PDF",
+        source_confidence=Decimal("0.88"),
+    ),
+    HtmlIndexSignalSource(
+        teryt_gmina="1215082",
+        source_url="https://zawoja.geoportal-krajowy.pl/plan-ogolny",
+        label="Zawoja Geoportal plan ogólny",
+        source_confidence=Decimal("0.90"),
+    ),
+    HtmlIndexSignalSource(
+        teryt_gmina="1215082",
+        source_url="https://ug.zawoja.pl/wp-content/uploads/2023/04/informacja-wersja-ostateczna.pdf",
+        label="Zawoja informacja do studium PDF",
+        source_confidence=Decimal("0.90"),
+    ),
+    HtmlIndexSignalSource(
+        teryt_gmina="1215082",
+        source_url="https://www.ug.zawoja.pl/sites/zawoja.ug.pl/files/tekst_planu_projekt.pdf",
+        label="Zawoja tekst planu projekt PDF",
+        source_confidence=Decimal("0.90"),
+    ),
+    HtmlIndexSignalSource(
+        teryt_gmina="1215082",
+        source_url="https://ug.zawoja.pl/wp-content/uploads/2023/09/2023.09.02_ZAWOJA-TEKST-zm-planu_do-wylozenia.pdf",
+        label="Zawoja zmiana planu do wyłożenia PDF",
+        source_confidence=Decimal("0.90"),
+    ),
+    HtmlIndexSignalSource(
+        teryt_gmina="1215082",
+        source_url="https://ug.zawoja.pl/ogloszenie-wojta-gminy-zawoja-o-wylozeniu-do-publicznego-wgladu-projektu-zmiany-studium-uwarunkowan-i-kierunkow-zagospodarowania-przestrzennego-gminy-zawoja/",
+        label="Zawoja wyłożenie projektu zmiany studium",
+        source_confidence=Decimal("0.88"),
+    ),
+    HtmlIndexSignalSource(
         teryt_gmina="2404042",
         source_url="https://bip.kamienicapolska.pl/artykul/studium-uwarunkowan",
         label="Kamienica Polska Studium - obowiązujące",
@@ -301,6 +729,144 @@ _HTML_INDEX_SIGNAL_REGISTRY: tuple[HtmlIndexSignalSource, ...] = (
         teryt_gmina="2409055",
         source_url="https://rastry.gison.pl/mpzp-public/zarki/uchwaly/U_2016_112_XVII_studium_tekst.pdf",
         label="Żarki Studium - tekst PDF",
+        source_confidence=Decimal("0.90"),
+    ),
+    HtmlIndexSignalSource(
+        teryt_gmina="2408031",
+        source_url="https://www.orzesze.pl/a%2C1695%2Cprzystapienie-do-sporzadzania-planu-ogolnego-zagospodarowania-przestrzennego-miasta-orzesze",
+        label="Orzesze Plan ogólny - ogłoszenie",
+        source_confidence=Decimal("0.90"),
+    ),
+    HtmlIndexSignalSource(
+        teryt_gmina="2408031",
+        source_url="https://morzesze.e-mapa.net/legislacja/mpzp/8647.html",
+        label="Orzesze MPZP projekt 8647",
+        source_confidence=Decimal("0.92"),
+    ),
+    HtmlIndexSignalSource(
+        teryt_gmina="2414021",
+        source_url="https://bip.imielin.pl/mfiles/2350/28/0/z/plan-og-lny_uchwa-a.pdf",
+        label="Imielin Plan ogólny uchwała PDF",
+        source_confidence=Decimal("0.92"),
+    ),
+    HtmlIndexSignalSource(
+        teryt_gmina="2414021",
+        source_url="https://www.imielin.pl/files/fck/Studium_tresc.pdf",
+        label="Imielin Studium tekst PDF",
+        source_confidence=Decimal("0.90"),
+    ),
+    HtmlIndexSignalSource(
+        teryt_gmina="2417032",
+        source_url="https://bip.gilowice.pl/9003",
+        label="Gilowice Plan ogólny - BIP",
+        source_confidence=Decimal("0.90"),
+    ),
+    HtmlIndexSignalSource(
+        teryt_gmina="2417032",
+        source_url="https://bip.gilowice.pl/6111/dokument/17703",
+        label="Gilowice MPZP dokument 17703",
+        source_confidence=Decimal("0.92"),
+    ),
+    HtmlIndexSignalSource(
+        teryt_gmina="2417032",
+        source_url="https://bip.gilowice.pl/6111/dokument/4141",
+        label="Gilowice Studium dokument 4141",
+        source_confidence=Decimal("0.90"),
+    ),
+    HtmlIndexSignalSource(
+        teryt_gmina="2417032",
+        source_url="https://www.archiwum.gilowice.pl/miejscowy-plan-zagospodarowania-przestrzennego-dla-solectwa-gilowice-i-rychwald%2C2173%2Cakt.html",
+        label="Gilowice MPZP sołectwa Gilowice i Rychwałd",
+        source_confidence=Decimal("0.88"),
+    ),
+    HtmlIndexSignalSource(
+        teryt_gmina="2417032",
+        source_url="https://www.archiwum.gilowice.pl/zdjecia/ak/zal/gilowice-uchwala-projekt_201807301535.pdf",
+        label="Gilowice uchwała projekt PDF",
+        source_confidence=Decimal("0.90"),
+    ),
+    HtmlIndexSignalSource(
+        teryt_gmina="2466011",
+        source_url="https://bip.gliwice.eu/planowanie-przestrzenne",
+        label="Gliwice Planowanie przestrzenne - BIP",
+        source_confidence=Decimal("0.90"),
+    ),
+    HtmlIndexSignalSource(
+        teryt_gmina="2466011",
+        source_url="https://msip.gliwice.eu/portal-planistyczny-geoportal-planistyczny",
+        label="Gliwice Geoportal planistyczny",
+        source_confidence=Decimal("0.90"),
+    ),
+    HtmlIndexSignalSource(
+        teryt_gmina="2466011",
+        source_url="https://msip.gliwice.eu/portal-planistyczny-mpzp-w-opracowaniu",
+        label="Gliwice MPZP w opracowaniu",
+        source_confidence=Decimal("0.92"),
+    ),
+    HtmlIndexSignalSource(
+        teryt_gmina="2466011",
+        source_url="https://msip.gliwice.eu/portal-planistyczny-plan-ogolny-informacje-ogolne",
+        label="Gliwice Plan ogólny - informacje ogólne",
+        source_confidence=Decimal("0.92"),
+    ),
+    HtmlIndexSignalSource(
+        teryt_gmina="2466011",
+        source_url="https://msip.gliwice.eu/add/file/1400005813.pdf",
+        label="Gliwice Plan ogólny - materiał informacyjny PDF",
+        source_confidence=Decimal("0.92"),
+    ),
+    HtmlIndexSignalSource(
+        teryt_gmina="2466011",
+        source_url="https://gliwice.eu/aktualnosci/miasto/rozpoczecie-nowej-procedury-planistycznej-osiedle-obroncow-pokoju",
+        label="Gliwice Procedura planistyczna - os. Obrońców Pokoju",
+        source_confidence=Decimal("0.92"),
+    ),
+    HtmlIndexSignalSource(
+        teryt_gmina="2466011",
+        source_url="https://gliwice.eu/aktualnosci/miasto/rozpoczecie-nowej-procedury-planistycznej-rejon-ulicy-plazynskiego",
+        label="Gliwice Procedura planistyczna - rejon ul. Płażyńskiego",
+        source_confidence=Decimal("0.92"),
+    ),
+    HtmlIndexSignalSource(
+        teryt_gmina="2466011",
+        source_url="https://gliwice.eu/aktualnosci/miasto/wylozenie-projektu-mpzp-dla-rejonu-ulic-piwnej-i-okopowej-od-16-sierpnia",
+        label="Gliwice Wyłożenie projektu MPZP Piwna i Okopowa",
+        source_confidence=Decimal("0.92"),
+    ),
+    HtmlIndexSignalSource(
+        teryt_gmina="2466011",
+        source_url="https://bip.gliwice.eu/rada-miasta/projekty-uchwal/karta-projektu/14172",
+        label="Gliwice Projekt uchwały 14172",
+        source_confidence=Decimal("0.92"),
+    ),
+    HtmlIndexSignalSource(
+        teryt_gmina="2466011",
+        source_url="https://geoportal.gliwice.eu/isdp/core/download/documents/.att/5-/CR8IZ9QJATKCMTRRFPHA/RUR_Na_Piasku_prezntacja_sesja_compressed.pdf",
+        label="Gliwice Na Piasku prezentacja PDF",
+        source_confidence=Decimal("0.92"),
+    ),
+    HtmlIndexSignalSource(
+        teryt_gmina="1262011",
+        source_url="https://www.nowysacz.pl/content/resources/urzad/rada_miasta/prawo_lokalne/zal1_tekst_studium.pdf",
+        label="Nowy Sącz Studium tekst PDF",
+        source_confidence=Decimal("0.90"),
+    ),
+    HtmlIndexSignalSource(
+        teryt_gmina="1262011",
+        source_url="https://www.nowysacz.pl/content/resources/urzad/rada_miasta/porzadek_obrad/2023/VIII_SRMNS_93/p_xciii_1173_23_viii.pdf",
+        label="Nowy Sącz Uchwała o planie ogólnym",
+        source_confidence=Decimal("0.90"),
+    ),
+    HtmlIndexSignalSource(
+        teryt_gmina="1262011",
+        source_url="https://www.nowysacz.pl/prawo-lokalne/pl_zp",
+        label="Nowy Sącz Prawo lokalne - planowanie przestrzenne",
+        source_confidence=Decimal("0.90"),
+    ),
+    HtmlIndexSignalSource(
+        teryt_gmina="1262011",
+        source_url="https://www.nowysacz.pl/zagospodarowanie-przestrzenne/29103",
+        label="Nowy Sącz MPZP projekt - konsultacje",
         source_confidence=Decimal("0.90"),
     ),
 )
@@ -417,9 +983,7 @@ class PlanningSignalSync:
     ) -> list[PlanningSignal]:
         headers = dict(_HTML_INDEX_HEADERS)
         headers["Referer"] = re.sub(r"/wykazplanow/?$", "/", source.source_url)
-        async with httpx.AsyncClient(timeout=httpx.Timeout(20.0), follow_redirects=True) as client:
-            response = await client.get(source.source_url, headers=headers)
-            response.raise_for_status()
+        response = await _fetch_source_response(source.source_url, headers=headers)
         source_type = _detect_source_type(source.source_url, response.headers.get("content-type"))
         if source_type == "pdf":
             page = _extract_pdf_text(response.content)
@@ -430,6 +994,11 @@ class PlanningSignalSync:
                 raise ValueError(html_index_error)
 
         signals: list[PlanningSignal] = []
+        if source_type == "gml":
+            gml_signal = _parse_gml_signal(page, source)
+            if gml_signal is not None:
+                signals.append(gml_signal)
+
         studium_match = _STUDIUM_ROW_RE.search(page) if source_type == "html_index" else None
         if studium_match:
             cells = _TD_RE.findall(studium_match.group(1))
@@ -593,6 +1162,8 @@ def _detect_source_type(source_url: str, content_type: str | None) -> str:
     lowered_content_type = (content_type or "").lower()
     if lowered_url.endswith(".pdf") or "application/pdf" in lowered_content_type:
         return "pdf"
+    if lowered_url.endswith(".gml") or "gml" in lowered_content_type or "xml" in lowered_content_type:
+        return "gml"
     return "html_index"
 
 
@@ -604,6 +1175,51 @@ def _extract_pdf_text(payload: bytes) -> str:
         if text:
             chunks.append(text)
     return "\n".join(chunks).strip()
+
+
+def _parse_gml_signal(
+    page: str,
+    source: HtmlIndexSignalSource,
+) -> PlanningSignal | None:
+    xml_text = html.unescape(page or "")
+    if not xml_text.strip():
+        return None
+
+    designation_normalized = normalize_designation_class("POG", xml_text)
+    if designation_normalized not in POSITIVE_DESIGNATIONS:
+        return None
+
+    snippet = " ".join(re.sub(r"[<>=\"']", " ", xml_text).split())[:240]
+    return PlanningSignal(
+        teryt_gmina=source.teryt_gmina,
+        signal_kind="planning_resolution",
+        signal_status="formal_directional",
+        designation_raw="POG",
+        designation_normalized=designation_normalized,
+        description=snippet,
+        plan_name=f"POG {source.teryt_gmina}",
+        uchwala_nr=None,
+        effective_date=None,
+        source_url=source.source_url,
+        source_type="html_index",
+        source_confidence=source.source_confidence,
+        legal_weight=score_signal(
+            signal_kind="planning_resolution",
+            designation_normalized=designation_normalized,
+            signal_status="formal_directional",
+        ),
+        geom=None,
+        evidence_chain=[
+            {
+                "step": "html_index",
+                "ref": source.source_url,
+                "designation_raw": "POG",
+                "title": snippet,
+                "label": source.label,
+            }
+        ],
+        updated_at=datetime.now(timezone.utc),
+    )
 
 
 def _parse_generic_planning_page_signal(

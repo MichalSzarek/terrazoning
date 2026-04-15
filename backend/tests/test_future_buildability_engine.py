@@ -6,6 +6,7 @@ from app.services.future_buildability_engine import (
     _derive_confidence_band,
     _derive_next_best_action,
     _derive_signal_quality_tier,
+    _score_supporting_signal_corroboration,
     _score_spatial_heuristics,
 )
 from app.services.planning_signal_utils import (
@@ -73,10 +74,25 @@ def test_confidence_band_accepts_supported_resolution_with_multiple_heuristics()
         future_signal_score=Decimal("30.00"),
         has_formal_signal=False,
         has_supporting_formal_signal=True,
+        has_corroborated_supporting_signal=False,
         heuristic_hits=2,
         hard_negative=False,
         dominant_unknown_resolution=False,
     ) is None
+
+
+def test_confidence_band_promotes_strong_preparatory_signal_to_supported() -> None:
+    assert _derive_confidence_band(
+        current_buildable_status="non_buildable",
+        overall_score=Decimal("61.00"),
+        future_signal_score=Decimal("41.00"),
+        has_formal_signal=False,
+        has_supporting_formal_signal=True,
+        has_corroborated_supporting_signal=False,
+        heuristic_hits=2,
+        hard_negative=False,
+        dominant_unknown_resolution=False,
+    ) == "supported"
 
 
 def test_confidence_band_keeps_formal_threshold_for_geometry_backed_signals() -> None:
@@ -86,6 +102,7 @@ def test_confidence_band_keeps_formal_threshold_for_geometry_backed_signals() ->
         future_signal_score=Decimal("50.00"),
         has_formal_signal=True,
         has_supporting_formal_signal=False,
+        has_corroborated_supporting_signal=False,
         heuristic_hits=1,
         hard_negative=False,
         dominant_unknown_resolution=False,
@@ -99,6 +116,7 @@ def test_confidence_band_accepts_near_threshold_geometry_backed_cases_as_support
         future_signal_score=Decimal("59.00"),
         has_formal_signal=True,
         has_supporting_formal_signal=False,
+        has_corroborated_supporting_signal=False,
         heuristic_hits=6,
         hard_negative=False,
         dominant_unknown_resolution=False,
@@ -112,6 +130,7 @@ def test_confidence_band_does_not_promote_coverage_only_metadata_by_itself() -> 
         future_signal_score=Decimal("45.00"),
         has_formal_signal=False,
         has_supporting_formal_signal=False,
+        has_corroborated_supporting_signal=False,
         heuristic_hits=0,
         hard_negative=False,
         dominant_unknown_resolution=False,
@@ -125,10 +144,95 @@ def test_confidence_band_blocks_unknown_planning_resolution_domination() -> None
         future_signal_score=Decimal("60.00"),
         has_formal_signal=False,
         has_supporting_formal_signal=True,
+        has_corroborated_supporting_signal=False,
         heuristic_hits=5,
         hard_negative=False,
         dominant_unknown_resolution=True,
     ) is None
+
+
+def test_supporting_signal_corroboration_rewards_three_consistent_sources() -> None:
+    bonus, corroborated, breakdown = _score_supporting_signal_corroboration(
+        [
+            {
+                "id": "a",
+                "signal_kind": "mpzp_project",
+                "signal_status": "formal_preparatory",
+                "designation_normalized": "mixed_residential",
+                "source_url": "https://example.test/a",
+                "plan_name": "Plan A",
+            },
+            {
+                "id": "b",
+                "signal_kind": "mpzp_project",
+                "signal_status": "formal_preparatory",
+                "designation_normalized": "mixed_residential",
+                "source_url": "https://example.test/b",
+                "plan_name": "Plan B",
+            },
+            {
+                "id": "c",
+                "signal_kind": "planning_resolution",
+                "signal_status": "formal_preparatory",
+                "designation_normalized": "mixed_residential",
+                "source_url": "https://example.test/c",
+                "plan_name": "Plan C",
+            },
+        ]
+    )
+
+    assert bonus == Decimal("10.00")
+    assert corroborated is True
+    assert breakdown[0]["kind"] == "supporting_signal_corroboration"
+
+
+def test_supporting_signal_corroboration_rewards_three_urbanizable_sources() -> None:
+    bonus, corroborated, breakdown = _score_supporting_signal_corroboration(
+        [
+            {
+                "id": "a",
+                "signal_kind": "planning_resolution",
+                "signal_status": "formal_preparatory",
+                "designation_normalized": "mixed_residential",
+                "source_url": "https://example.test/a",
+                "plan_name": "Plan A",
+            },
+            {
+                "id": "b",
+                "signal_kind": "planning_resolution",
+                "signal_status": "formal_preparatory",
+                "designation_normalized": "residential",
+                "source_url": "https://example.test/b",
+                "plan_name": "Plan B",
+            },
+            {
+                "id": "c",
+                "signal_kind": "planning_resolution",
+                "signal_status": "formal_directional",
+                "designation_normalized": "mixed_residential",
+                "source_url": "https://example.test/c",
+                "plan_name": "Plan C",
+            },
+        ]
+    )
+
+    assert bonus == Decimal("10.00")
+    assert corroborated is True
+    assert breakdown[0]["designation_normalized"] == "urbanizable"
+
+
+def test_confidence_band_accepts_corroborated_supporting_signal_without_spatial_heuristics() -> None:
+    assert _derive_confidence_band(
+        current_buildable_status="non_buildable",
+        overall_score=Decimal("60.00"),
+        future_signal_score=Decimal("40.00"),
+        has_formal_signal=False,
+        has_supporting_formal_signal=True,
+        has_corroborated_supporting_signal=True,
+        heuristic_hits=0,
+        hard_negative=False,
+        dominant_unknown_resolution=False,
+    ) == "supported"
 
 
 def test_signal_quality_tier_collapses_speculative_into_below_threshold() -> None:

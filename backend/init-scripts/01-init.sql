@@ -154,9 +154,13 @@ CREATE TABLE silver.dzialki (
     teryt_wojewodztwo   CHAR(2)         NOT NULL,   -- kod TERYT województwa (2 cyfry)
     teryt_powiat        CHAR(4)         NOT NULL,   -- kod TERYT powiatu (4 cyfry)
     teryt_gmina         CHAR(7)         NOT NULL,   -- kod TERYT gminy (7 cyfr)
-    teryt_obreb         CHAR(9)         NOT NULL,   -- kod TERYT obrębu (9 cyfr)
+    teryt_obreb         TEXT            NOT NULL,   -- kod TERYT obrębu (9-10 cyfr; gmina + suffix obrębu)
     numer_dzialki       TEXT            NOT NULL,   -- np. '123/4', '45/AB'
     identyfikator       TEXT            NOT NULL UNIQUE, -- teryt_obreb || '.' || numer_dzialki
+
+    -- Kod użytku gruntowego EGiB (np. R, Ł, Ps, Ls, B, Bp).
+    -- NULL oznacza, że use-class nie została jeszcze pobrana albo wyliczona.
+    current_use         TEXT,
 
     -- Geometria — WYŁĄCZNIE EPSG:2180 (PUWG 1992)
     -- GIS Specialist NOTE: ST_MakeValid() MUST be applied before INSERT.
@@ -192,6 +196,9 @@ COMMENT ON COLUMN silver.dzialki.area_m2 IS
 COMMENT ON COLUMN silver.dzialki.identyfikator IS
     'Format: {teryt_obreb}.{numer_dzialki}, e.g. 141201_1.0001.123/4. '
     'Matches GUGiK cadastral identifier format.';
+COMMENT ON COLUMN silver.dzialki.current_use IS
+    'EGiB land-use code used by DeltaEngine and FutureBuildabilityEngine. '
+    'Examples: R, Ł, Ps, Ls, B, Bp. NULL means not yet available.';
 
 -- Spatial index (GIST) — MANDATORY, enables ST_Intersects performance
 CREATE INDEX idx_dzialki_geom

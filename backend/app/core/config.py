@@ -91,8 +91,8 @@ class Settings(BaseSettings):
     # -------------------------------------------------------------------------
     # GCS — Evidence Chain storage
     # -------------------------------------------------------------------------
-    gcs_bucket: str = Field(default="terrazoning-evidence-dev")
-    gcs_project: str = Field(default="terrazoning-dev")
+    gcs_bucket: str = Field(default="maths-terrazoning-evidence-dev")
+    gcs_project: str = Field(default="maths-489717")
 
     # -------------------------------------------------------------------------
     # External APIs
@@ -123,6 +123,14 @@ class Settings(BaseSettings):
     # Feature flags
     # -------------------------------------------------------------------------
     future_buildability_enabled: bool = True
+    cors_allowed_origins: str = "http://localhost:3000,http://localhost:5173,http://127.0.0.1:5173"
+
+    def parsed_cors_allowed_origins(self) -> list[str]:
+        return [
+            origin.strip()
+            for origin in self.cors_allowed_origins.split(",")
+            if origin.strip()
+        ]
 
 
 # Module-level singleton — import this everywhere

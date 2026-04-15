@@ -239,6 +239,148 @@ cp .env.example .env
 npm run dev
 ```
 
+---
+
+## Managed deployment on GCP `maths`
+
+TerraZoning ma teraz przygotowane artefakty do zarządzanego wdrożenia w projekcie `maths`:
+- `Dockerfile.backend`
+- `Dockerfile.frontend`
+- `cloudbuild.backend.yaml`
+- `cloudbuild.frontend.yaml`
+- `.github/workflows/deploy-backend.yml`
+- `.github/workflows/deploy-frontend.yml`
+
+Docelowy model:
+- `terrazoning-api` na Cloud Run
+- `terrazoning-frontend` na Cloud Run
+- Cloud Run Jobs dla scrape / geo-resolve / delta / planning-signal-sync / future-buildability / campaign-rollout
+- istniejąca baza `terrazoning` na współdzielonym Cloud SQL
+- opcjonalnie `LB + IAP` z relatywnym `/api`
+
+### Dostęp lokalny przez proxy do Cloud Run
+
+Usługi są wdrożone na GCP Cloud Run. Aby uzyskać do nich dostęp lokalnie przez proxy:
+
+```bash
+gcloud auth login
+gcloud config set project maths-489717
+```
+
+#### TerraZoning Frontend (port 5173)
+
+```bash
+gcloud run services proxy terrazoning-frontend --region=europe-west1 --port=5173
+```
+
+Następnie otwórz: **http://localhost:5173**
+
+#### TerraZoning API (port 8000)
+
+```bash
+gcloud run services proxy terrazoning-api --region=europe-west1 --port=8000
+```
+
+Następnie otwórz: **http://localhost:8000/docs**
+
+Możesz też użyć gotowych targetów:
+
+```bash
+make gcp-proxy-frontend
+make gcp-proxy-api
+```
+
+**Wymagania:** `gcloud auth login` oraz dostęp do projektu `maths-489717`.
+
+### GitHub Actions — sekcja GitHub
+
+Poniżej jest stan **aktualnie skonfigurowany** w repo `MichalSzarek/terrazoning`.
+
+#### Tabela konfiguracji GitHub
+
+| name | type | required | current value | used by |
+|---|---|---|---|---|
+| `GCP_WORKLOAD_IDENTITY_PROVIDER` | secret | tak | `projects/478521031206/locations/global/workloadIdentityPools/github/providers/github-actions` | `.github/workflows/deploy-backend.yml`, `.github/workflows/deploy-frontend.yml` |
+| `GCP_DEPLOY_SERVICE_ACCOUNT` | secret | tak | `github-deploy-sa@maths-489717.iam.gserviceaccount.com` | `.github/workflows/deploy-backend.yml`, `.github/workflows/deploy-frontend.yml` |
+| `GCP_PROJECT_ID` | variable | tak | `maths-489717` | workflow backend/frontend, `Makefile`, Cloud Build substitutions |
+| `GCP_REGION` | variable | tak | `europe-west1` | workflow backend/frontend, `Makefile`, Cloud Build substitutions |
+| `ARTIFACT_REGISTRY_REPOSITORY` | variable | tak | `python-apps` | workflow backend/frontend, `cloudbuild.backend.yaml`, `cloudbuild.frontend.yaml` |
+| `TERRAZONING_API_SERVICE` | variable | tak | `terrazoning-api` | workflow backend/frontend, `Makefile`, smoke checks |
+| `TERRAZONING_FRONTEND_SERVICE` | variable | tak | `terrazoning-frontend` | workflow frontend, `Makefile`, smoke checks |
+| `TERRAZONING_BACKEND_IMAGE` | variable | tak | `terrazoning-backend` | workflow backend, `cloudbuild.backend.yaml` |
+| `TERRAZONING_FRONTEND_IMAGE` | variable | tak | `terrazoning-frontend` | workflow frontend, `cloudbuild.frontend.yaml` |
+| `TERRAZONING_JOB_SCRAPE_LIVE` | variable | tak | `terrazoning-scrape-live` | workflow backend, `cloudbuild.backend.yaml`, `Makefile` |
+| `TERRAZONING_JOB_GEO_RESOLVE` | variable | tak | `terrazoning-geo-resolve` | workflow backend, `cloudbuild.backend.yaml`, `Makefile` |
+| `TERRAZONING_JOB_DELTA` | variable | tak | `terrazoning-delta` | workflow backend, `cloudbuild.backend.yaml`, `Makefile` |
+| `TERRAZONING_JOB_PLANNING_SIGNAL_SYNC` | variable | tak | `terrazoning-planning-signal-sync` | workflow backend, `cloudbuild.backend.yaml`, `Makefile` |
+| `TERRAZONING_JOB_FUTURE_BUILDABILITY` | variable | tak | `terrazoning-future-buildability` | workflow backend, `cloudbuild.backend.yaml`, `Makefile` |
+| `TERRAZONING_JOB_CAMPAIGN_ROLLOUT` | variable | tak | `terrazoning-campaign-rollout` | workflow backend, `cloudbuild.backend.yaml`, `Makefile` |
+| `CLOUD_BUILD_SOURCE_STAGING_DIR` | variable | tak | `gs://maths-cloudbuild-source-478521031206/source` | workflow backend/frontend, `Makefile`, `gcloud builds submit` |
+| `CLOUD_BUILD_SERVICE_ACCOUNT` | variable | tak | `projects/maths-489717/serviceAccounts/478521031206-compute@developer.gserviceaccount.com` | workflow backend/frontend, `Makefile`, Cloud Build runtime |
+| `TERRAZONING_FUTURE_BUILDABILITY_ENABLED` | variable | nie | `true` | workflow frontend, `cloudbuild.frontend.yaml`, frontend feature flags |
+| `TERRAZONING_SAME_ORIGIN_API` | variable | nie | `false` | workflow frontend, wybór między direct API URL a relatywnym `/api` |
+| `TERRAZONING_API_BASE_URL` | variable | nie | `https://terrazoning-api-56hnekgh5a-ew.a.run.app` | workflow frontend, jawny override API URL |
+| `TERRAZONING_MAP_STYLE_URL` | variable | nie | `https://tiles.openfreemap.org/styles/liberty` | workflow frontend, `cloudbuild.frontend.yaml`, mapa w UI |
+
+#### Co oznaczają opcjonalne zmienne
+
+- `TERRAZONING_FUTURE_BUILDABILITY_ENABLED=true`
+  - zostawia segment `future_buildable` w UI włączony podczas builda frontu
+- `TERRAZONING_SAME_ORIGIN_API=false`
+  - obecny tryb bootstrapowy; frontend używa bezpośredniego URL API zamiast relatywnego `/api`
+- `TERRAZONING_API_BASE_URL=https://terrazoning-api-56hnekgh5a-ew.a.run.app`
+  - wymusza aktualny Cloud Run URL backendu przy deployu frontu
+- `TERRAZONING_MAP_STYLE_URL=https://tiles.openfreemap.org/styles/liberty`
+  - jawnie przypina obecny produkcyjny styl mapy
+
+#### Uwaga operacyjna
+
+Jeśli zmieniasz nazwy usług, jobów albo repozytorium Artifact Registry, zaktualizuj:
+- GitHub repo variables
+- `Makefile`
+- `cloudbuild.backend.yaml`
+- `cloudbuild.frontend.yaml`
+- workflowy w `.github/workflows/`
+
+### Stan bazy Cloud SQL
+
+Cloud SQL `terrazoning` został już zsynchronizowany z pełniejszą lokalną bazą developerską. Aktualny stan po migracji:
+
+- `bronze.raw_listings = 86`
+- `silver.dzialki = 161`
+- `gold.planning_zones = 10364`
+- `gold.investment_leads = 1`
+
+Przed nadpisaniem wykonano backup bieżącego stanu Cloud SQL do lokalnego dumpa operatorskiego.
+
+Najważniejsze komendy lokalne pod deploy i smoke checks:
+
+```bash
+make gcp-deploy-backend
+make gcp-deploy-frontend
+make gcp-service-urls
+make gcp-smoke-api
+make gcp-smoke-frontend
+```
+
+### Frontend: bootstrap vs same-origin
+
+Są dwa poprawne tryby produkcyjne:
+
+1. **Bootstrap direct-to-API**
+   - frontend bake’uje bezpośredni URL backendu Cloud Run
+   - dobry do pierwszego uruchomienia bez load balancera
+
+2. **Docelowy `LB + IAP + same-origin /api`**
+   - frontend nie bake’uje URL API
+   - działa na relatywnym `/api`
+   - w GitHub Actions repo variable ustaw:
+     - `TERRAZONING_SAME_ORIGIN_API=true`
+
+Szczegółowy plan i runbook:
+- [2026-04-15-gcp-maths-deployment-plan.md](/Users/michalszarek/worksapace/terrazoning/docs/2026-04-15-gcp-maths-deployment-plan.md)
+- [2026-04-15-gcp-maths-deploy-runbook.md](/Users/michalszarek/worksapace/terrazoning/docs/2026-04-15-gcp-maths-deploy-runbook.md)
+
 Otwórz **http://localhost:5173**
 
 Kokpit wyświetla mapę Polski z kolorowymi poligonami działek (im czerwieńszy, tym wyższy `confidence_score`) oraz sidebar z listą leadów i pełnym łańcuchem dowodowym.

@@ -471,10 +471,31 @@ export function sortLeadFeatures(features: LeadFeature[], sortKey: LeadSortKey):
       if (priceDelta !== 0) return priceDelta;
     }
 
+    if (sortKey === 'total_price_asc') {
+      const signalDelta = Number(classifyPriceSignal(a) === 'reliable') - Number(classifyPriceSignal(b) === 'reliable');
+      if (signalDelta !== 0) return -signalDelta;
+      const priceDelta = compareNullableNumberAsc(a.price_zl, b.price_zl);
+      if (priceDelta !== 0) return priceDelta;
+    }
+
+    if (sortKey === 'total_price_desc') {
+      const signalDelta = Number(classifyPriceSignal(a) === 'reliable') - Number(classifyPriceSignal(b) === 'reliable');
+      if (signalDelta !== 0) return -signalDelta;
+      const priceDelta = compareNullableNumberDesc(a.price_zl, b.price_zl);
+      if (priceDelta !== 0) return priceDelta;
+    }
+
     if (sortKey === 'entry_price_asc') {
       const signalDelta = Number(classifyPriceSignal(a) === 'reliable') - Number(classifyPriceSignal(b) === 'reliable');
       if (signalDelta !== 0) return -signalDelta;
       const priceDelta = compareNullableNumberAsc(a.price_zl, b.price_zl);
+      if (priceDelta !== 0) return priceDelta;
+    }
+
+    if (sortKey === 'area_desc') {
+      const areaDelta = compareNullableNumberDesc(a.area_m2, b.area_m2);
+      if (areaDelta !== 0) return areaDelta;
+      const priceDelta = compareNullableNumberAsc(a.price_per_m2_zl, b.price_per_m2_zl);
       if (priceDelta !== 0) return priceDelta;
     }
 

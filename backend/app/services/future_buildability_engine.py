@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from collections import defaultdict
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from decimal import Decimal
@@ -298,6 +299,7 @@ class FutureBuildabilityEngine:
         hard_negative = False
         has_formal_signal = False
         has_supporting_formal_signal = False
+        has_corroborated_supporting_signal = False
         dominant_unknown_resolution = False
 
         for row in signal_rows:
@@ -338,6 +340,12 @@ class FutureBuildabilityEngine:
                 }
             )
 
+        corroboration_bonus, has_corroborated_supporting_signal, corroboration_breakdown = (
+            _score_supporting_signal_corroboration(signal_rows)
+        )
+        future_signal_score += corroboration_bonus
+        signal_breakdown.extend(corroboration_breakdown)
+
         heuristics_bonus, heuristic_hits, heuristic_breakdown = _score_spatial_heuristics(heuristics)
         signal_breakdown.extend(heuristic_breakdown)
         distance_to_nearest = _decimal_or_none(heuristics.get("distance_to_nearest_buildable_m"))
@@ -356,6 +364,7 @@ class FutureBuildabilityEngine:
             future_signal_score=future_signal_score,
             has_formal_signal=has_formal_signal,
             has_supporting_formal_signal=has_supporting_formal_signal,
+            has_corroborated_supporting_signal=has_corroborated_supporting_signal,
             heuristic_hits=heuristic_hits,
             hard_negative=hard_negative,
             dominant_unknown_resolution=dominant_unknown_resolution,
@@ -821,6 +830,83 @@ def _score_spatial_heuristics(heuristics: dict[str, Any]) -> tuple[Decimal, int,
     return bonus, hits, breakdown
 
 
+def _score_supporting_signal_corroboration(
+    signal_rows: list[dict[str, Any]],
+) -> tuple[Decimal, bool, list[dict[str, Any]]]:
+    grouped_sources: dict[str, set[str]] = defaultdict(set)
+    grouped_family_sources: dict[str, set[str]] = defaultdict(set)
+
+    for row in signal_rows:
+        signal_kind = row["signal_kind"]
+        designation = row["designation_normalized"] or ""
+        if signal_kind not in {"planning_resolution", "mpzp_project"}:
+            continue
+        if designation not in POSITIVE_DESIGNATIONS:
+            continue
+        if score_signal(
+            signal_kind=signal_kind,
+            designation_normalized=designation,
+            signal_status=row["signal_status"],
+        ) <= 0:
+            continue
+        source_key = row["source_url"] or row["plan_name"] or str(row["id"])
+        grouped_sources[designation].add(source_key)
+        grouped_family_sources["urbanizable"].add(source_key)
+
+    best_designation = next(
+        (
+            designation
+            for designation, sources in sorted(
+                grouped_sources.items(),
+                key=lambda item: (-len(item[1]), item[0]),
+            )
+            if len(sources) >= 3
+        ),
+        None,
+    )
+    if best_designation is not None:
+        corroboration_count = len(grouped_sources[best_designation])
+        return (
+            Decimal("10.00"),
+            True,
+            [
+                {
+                    "kind": "supporting_signal_corroboration",
+                    "status": "formal_preparatory",
+                    "designation_raw": None,
+                    "designation_normalized": best_designation,
+                    "weight": 10.0,
+                    "source_url": None,
+                    "evidence_label": (
+                        f"{corroboration_count} corroborating supporting sources for {best_designation}"
+                    ),
+                }
+            ],
+        )
+
+    urbanizable_count = len(grouped_family_sources["urbanizable"])
+    if urbanizable_count < 3:
+        return Decimal("0.00"), False, []
+
+    return (
+        Decimal("10.00"),
+        True,
+        [
+            {
+                "kind": "supporting_signal_corroboration",
+                "status": "formal_preparatory",
+                "designation_raw": None,
+                "designation_normalized": "urbanizable",
+                "weight": 10.0,
+                "source_url": None,
+                "evidence_label": (
+                    f"{urbanizable_count} corroborating supporting sources for urbanizable uses"
+                ),
+            }
+        ],
+    )
+
+
 def _derive_confidence_band(
     *,
     current_buildable_status: str,
@@ -828,6 +914,7 @@ def _derive_confidence_band(
     future_signal_score: Decimal,
     has_formal_signal: bool,
     has_supporting_formal_signal: bool,
+    has_corroborated_supporting_signal: bool,
     heuristic_hits: int,
     hard_negative: bool,
     dominant_unknown_resolution: bool,
@@ -839,6 +926,20 @@ def _derive_confidence_band(
     if overall_score >= Decimal("60.00"):
         if has_formal_signal:
             return "formal"
+        if (
+            has_supporting_formal_signal
+            and future_signal_score >= Decimal("40.00")
+            and heuristic_hits >= 2
+            and not hard_negative
+        ):
+            return "supported"
+        if (
+            has_supporting_formal_signal
+            and has_corroborated_supporting_signal
+            and future_signal_score >= Decimal("40.00")
+            and not hard_negative
+        ):
+            return "supported"
         if heuristic_hits >= 2 and not hard_negative:
             return "speculative"
         return None

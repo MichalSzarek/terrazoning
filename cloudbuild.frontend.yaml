@@ -1,0 +1,71 @@
+substitutions:
+  _PROJECT_ID: maths-489717
+  _REGION: europe-west1
+  _REPOSITORY: python-apps
+  _IMAGE: terrazoning-frontend
+  _SERVICE: terrazoning-frontend
+  _API_BASE_URL: ""
+  _FUTURE_BUILDABILITY_ENABLED: "true"
+  _MAP_STYLE_URL: ""
+
+steps:
+  - name: gcr.io/cloud-builders/docker
+    args:
+      - build
+      - -f
+      - Dockerfile.frontend
+      - --build-arg
+      - VITE_API_BASE_URL=${_API_BASE_URL}
+      - --build-arg
+      - VITE_FUTURE_BUILDABILITY_ENABLED=${_FUTURE_BUILDABILITY_ENABLED}
+      - --build-arg
+      - VITE_MAP_STYLE_URL=${_MAP_STYLE_URL}
+      - -t
+      - ${_REGION}-docker.pkg.dev/${_PROJECT_ID}/${_REPOSITORY}/${_IMAGE}:${SHORT_SHA}
+      - -t
+      - ${_REGION}-docker.pkg.dev/${_PROJECT_ID}/${_REPOSITORY}/${_IMAGE}:latest
+      - .
+
+  - name: gcr.io/cloud-builders/docker
+    args:
+      - push
+      - ${_REGION}-docker.pkg.dev/${_PROJECT_ID}/${_REPOSITORY}/${_IMAGE}:${SHORT_SHA}
+
+  - name: gcr.io/cloud-builders/docker
+    args:
+      - push
+      - ${_REGION}-docker.pkg.dev/${_PROJECT_ID}/${_REPOSITORY}/${_IMAGE}:latest
+
+  - name: gcr.io/google.com/cloudsdktool/cloud-sdk:slim
+    entrypoint: gcloud
+    args:
+      - run
+      - deploy
+      - ${_SERVICE}
+      - --image
+      - ${_REGION}-docker.pkg.dev/${_PROJECT_ID}/${_REPOSITORY}/${_IMAGE}:${SHORT_SHA}
+      - --region
+      - ${_REGION}
+      - --project
+      - ${_PROJECT_ID}
+      - --quiet
+
+  - name: gcr.io/google.com/cloudsdktool/cloud-sdk:slim
+    entrypoint: bash
+    args:
+      - -ceu
+      - |
+        service_url="$$(gcloud run services describe "${_SERVICE}" \
+          --region "${_REGION}" \
+          --project "${_PROJECT_ID}" \
+          --format='value(status.url)')"
+        curl --fail --show-error --silent "$${service_url}" >/dev/null
+
+images:
+  - ${_REGION}-docker.pkg.dev/${_PROJECT_ID}/${_REPOSITORY}/${_IMAGE}:${SHORT_SHA}
+  - ${_REGION}-docker.pkg.dev/${_PROJECT_ID}/${_REPOSITORY}/${_IMAGE}:latest
+
+options:
+  logging: CLOUD_LOGGING_ONLY
+
+timeout: 1800s

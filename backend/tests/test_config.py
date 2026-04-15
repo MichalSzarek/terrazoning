@@ -48,3 +48,14 @@ def test_database_url_override_rewrites_existing_driver() -> None:
         settings.database_url_sync
         == "postgresql+psycopg2://admin:secret@localhost/terrazoning"
     )
+
+
+def test_cors_allowed_origins_parses_csv() -> None:
+    settings = Settings(
+        cors_allowed_origins="http://localhost:5173, https://terrazoning.example.com  ,"
+    )
+
+    assert settings.parsed_cors_allowed_origins() == [
+        "http://localhost:5173",
+        "https://terrazoning.example.com",
+    ]

@@ -1,0 +1,104 @@
+substitutions:
+  _PROJECT_ID: maths-489717
+  _REGION: europe-west1
+  _REPOSITORY: python-apps
+  _IMAGE: terrazoning-backend
+  _SERVICE: terrazoning-api
+  _SYNC_JOBS: "true"
+  _JOB_SCRAPE_LIVE: terrazoning-scrape-live
+  _JOB_GEO_RESOLVE: terrazoning-geo-resolve
+  _JOB_DELTA: terrazoning-delta
+  _JOB_PLANNING_SIGNAL_SYNC: terrazoning-planning-signal-sync
+  _JOB_FUTURE_BUILDABILITY: terrazoning-future-buildability
+  _JOB_CAMPAIGN_ROLLOUT: terrazoning-campaign-rollout
+
+steps:
+  - name: gcr.io/cloud-builders/docker
+    args:
+      - build
+      - -f
+      - Dockerfile.backend
+      - -t
+      - ${_REGION}-docker.pkg.dev/${_PROJECT_ID}/${_REPOSITORY}/${_IMAGE}:${SHORT_SHA}
+      - -t
+      - ${_REGION}-docker.pkg.dev/${_PROJECT_ID}/${_REPOSITORY}/${_IMAGE}:latest
+      - .
+
+  - name: gcr.io/cloud-builders/docker
+    args:
+      - push
+      - ${_REGION}-docker.pkg.dev/${_PROJECT_ID}/${_REPOSITORY}/${_IMAGE}:${SHORT_SHA}
+
+  - name: gcr.io/cloud-builders/docker
+    args:
+      - push
+      - ${_REGION}-docker.pkg.dev/${_PROJECT_ID}/${_REPOSITORY}/${_IMAGE}:latest
+
+  - name: gcr.io/google.com/cloudsdktool/cloud-sdk:slim
+    entrypoint: gcloud
+    args:
+      - run
+      - deploy
+      - ${_SERVICE}
+      - --image
+      - ${_REGION}-docker.pkg.dev/${_PROJECT_ID}/${_REPOSITORY}/${_IMAGE}:${SHORT_SHA}
+      - --region
+      - ${_REGION}
+      - --project
+      - ${_PROJECT_ID}
+      - --quiet
+
+  - name: gcr.io/google.com/cloudsdktool/cloud-sdk:slim
+    entrypoint: bash
+    args:
+      - -ceu
+      - |
+        service_url="$$(gcloud run services describe "${_SERVICE}" \
+          --region "${_REGION}" \
+          --project "${_PROJECT_ID}" \
+          --format='value(status.url)')"
+        curl --fail --show-error --silent "$${service_url}/api/v1/health" >/dev/null
+
+  - name: gcr.io/google.com/cloudsdktool/cloud-sdk:slim
+    entrypoint: bash
+    args:
+      - -ceu
+      - |
+        if [[ "${_SYNC_JOBS}" != "true" ]]; then
+          echo "Skipping Cloud Run job image sync (_SYNC_JOBS=${_SYNC_JOBS})"
+          exit 0
+        fi
+
+        image_uri="${_REGION}-docker.pkg.dev/${_PROJECT_ID}/${_REPOSITORY}/${_IMAGE}:${SHORT_SHA}"
+        for job in \
+          "${_JOB_SCRAPE_LIVE}" \
+          "${_JOB_GEO_RESOLVE}" \
+          "${_JOB_DELTA}" \
+          "${_JOB_PLANNING_SIGNAL_SYNC}" \
+          "${_JOB_FUTURE_BUILDABILITY}" \
+          "${_JOB_CAMPAIGN_ROLLOUT}"; do
+          if [[ -z "${job}" ]]; then
+            continue
+          fi
+
+          if gcloud run jobs describe "${job}" \
+            --region "${_REGION}" \
+            --project "${_PROJECT_ID}" >/dev/null 2>&1; then
+            gcloud run jobs update "${job}" \
+              --image "${image_uri}" \
+              --region "${_REGION}" \
+              --project "${_PROJECT_ID}" \
+              --quiet
+          else
+            echo "Skipping missing Cloud Run job: ${job}"
+          fi
+        done
+
+images:
+  - ${_REGION}-docker.pkg.dev/${_PROJECT_ID}/${_REPOSITORY}/${_IMAGE}:${SHORT_SHA}
+  - ${_REGION}-docker.pkg.dev/${_PROJECT_ID}/${_REPOSITORY}/${_IMAGE}:latest
+
+options:
+  logging: CLOUD_LOGGING_ONLY
+
+timeout: 2400s
