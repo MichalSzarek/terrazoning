@@ -67,7 +67,7 @@ jobs:
         shell: bash
         run: |
           SHORT_SHA="${GITHUB_SHA::7}"
-          gcloud builds submit \
+          bash ./scripts/submit_cloud_build_and_wait.sh \
             --config cloudbuild.frontend.yaml \
             --project "${PROJECT_ID}" \
             --service-account "${CLOUD_BUILD_SERVICE_ACCOUNT}" \
