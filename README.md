@@ -277,6 +277,16 @@ Następnie otwórz:
 - **http://localhost:5173**
 - **http://localhost:8000/docs**
 
+Jeśli port `8000` albo `5173` jest już zajęty lokalnie, możesz nadpisać porty:
+
+```bash
+BACKEND_PORT=18000 FRONTEND_PORT=15173 make gcp-proxy
+```
+
+Wtedy otwórz:
+- **http://localhost:15173**
+- **http://localhost:18000/docs**
+
 Jeśli wolisz uruchamiać proxy osobno:
 
 #### TerraZoning Frontend (port 5173)
