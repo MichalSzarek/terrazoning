@@ -33,7 +33,7 @@ TERRAZONING_MAP_STYLE_URL ?=
 CLOUD_BUILD_SOURCE_STAGING_DIR ?= gs://maths-cloudbuild-source-478521031206/source
 CLOUD_BUILD_SERVICE_ACCOUNT ?= projects/maths-489717/serviceAccounts/478521031206-compute@developer.gserviceaccount.com
 GCP_JOB_ARGS ?=
-TERRAZONING_FRONTEND_API_BASE_URL ?=
+TERRAZONING_FRONTEND_API_BASE_URL ?= http://localhost:8000
 
 .PHONY: help sync-all sync-backend sync-scraper sync-frontend scrape-dry scrape-live mpzp-sync mpzp-one \
 	mpzp-uncovered mpzp-registry mpzp-ruda reparse-bronze geo-resolve delta planning-signal-sync \
@@ -42,7 +42,7 @@ TERRAZONING_FRONTEND_API_BASE_URL ?=
 	report-malopolskie delta-gap-malopolskie campaign-slaskie campaign-malopolskie campaign-all campaign-rollout-cloudsql \
 	run run-local run-backend run-frontend backend-dev backend-cloudsql cloudsql-health \
 	gcp-deploy-backend gcp-deploy-frontend gcp-service-urls gcp-smoke-api gcp-smoke-frontend \
-	gcp-proxy-frontend gcp-proxy-api \
+	gcp-auth gcp-proxy gcp-proxy-frontend gcp-proxy-api \
 	gcp-job-scrape-live gcp-job-geo-resolve gcp-job-delta gcp-job-planning-signal-sync \
 	gcp-job-future-buildability gcp-job-campaign-rollout
 
@@ -58,6 +58,8 @@ help:
 	@echo "  make gcp-service-urls  - print deployed TerraZoning Cloud Run URLs"
 	@echo "  make gcp-smoke-api     - smoke check deployed TerraZoning API"
 	@echo "  make gcp-smoke-frontend - smoke check deployed TerraZoning frontend"
+	@echo "  make gcp-auth          - gcloud auth login + select maths project"
+	@echo "  make gcp-proxy         - start both TerraZoning Cloud Run proxies locally"
 	@echo "  make gcp-proxy-frontend - proxy TerraZoning frontend locally via gcloud (default port 5173)"
 	@echo "  make gcp-proxy-api     - proxy TerraZoning API locally via gcloud (default port 8000)"
 	@echo "  make gcp-job-scrape-live - execute TerraZoning scrape-live Cloud Run job"
@@ -278,11 +280,20 @@ gcp-service-urls:
 
 gcp-smoke-api:
 	@API_URL=$$(gcloud run services describe $(TERRAZONING_API_SERVICE) --project $(GCP_PROJECT_ID) --region $(GCP_REGION) --format='value(status.url)'); \
-	curl --fail --show-error --silent "$${API_URL}/api/v1/health" >/dev/null && echo "API smoke check ok: $${API_URL}"
+	TOKEN=$$(gcloud auth print-identity-token --audiences "$${API_URL}"); \
+	curl --fail --show-error --silent -H "Authorization: Bearer $${TOKEN}" "$${API_URL}/api/v1/health" >/dev/null && echo "API smoke check ok: $${API_URL}"
 
 gcp-smoke-frontend:
 	@FRONTEND_URL=$$(gcloud run services describe $(TERRAZONING_FRONTEND_SERVICE) --project $(GCP_PROJECT_ID) --region $(GCP_REGION) --format='value(status.url)'); \
-	curl --fail --show-error --silent "$${FRONTEND_URL}" >/dev/null && echo "Frontend smoke check ok: $${FRONTEND_URL}"
+	TOKEN=$$(gcloud auth print-identity-token --audiences "$${FRONTEND_URL}"); \
+	curl --fail --show-error --silent -H "Authorization: Bearer $${TOKEN}" "$${FRONTEND_URL}" >/dev/null && echo "Frontend smoke check ok: $${FRONTEND_URL}"
+
+gcp-auth:
+	gcloud auth login
+	gcloud config set project $(GCP_PROJECT_ID)
+
+gcp-proxy:
+	bash ./scripts/run_gcp_proxies.sh
 
 gcp-proxy-frontend:
 	gcloud run services proxy $(TERRAZONING_FRONTEND_SERVICE) --project $(GCP_PROJECT_ID) --region $(GCP_REGION) --port $(FRONTEND_PORT)

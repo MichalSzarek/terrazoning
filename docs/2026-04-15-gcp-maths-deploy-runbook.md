@@ -55,12 +55,19 @@ make gcp-service-urls
 
 ## 3a. Lokalny dostęp przez Cloud Run proxy
 
-Jeśli nie chcesz używać publicznych URL-i Cloud Run w przeglądarce, korzystaj z lokalnego proxy:
+Aktualny model operatorski to proxy-only. Jeśli nie chcesz używać publicznych URL-i Cloud Run w przeglądarce, korzystaj z lokalnego proxy:
 
 ```bash
-gcloud auth login
-gcloud config set project maths-489717
+cd /Users/michalszarek/worksapace/terrazoning
+make gcp-auth
+make gcp-proxy
 ```
+
+Potem otwórz:
+- `http://localhost:5173`
+- `http://localhost:8000/docs`
+
+Jeśli chcesz rozdzielić proxy na dwa terminale:
 
 ### Frontend (port 5173)
 
@@ -201,15 +208,15 @@ Kiedy DNS i OAuth client będą gotowe:
 | `CLOUD_BUILD_SERVICE_ACCOUNT` | variable | tak | `projects/maths-489717/serviceAccounts/478521031206-compute@developer.gserviceaccount.com` | workflow backend/frontend, `Makefile`, Cloud Build runtime |
 | `TERRAZONING_FUTURE_BUILDABILITY_ENABLED` | variable | nie | `true` | workflow frontend, `cloudbuild.frontend.yaml`, frontend feature flags |
 | `TERRAZONING_SAME_ORIGIN_API` | variable | nie | `false` | workflow frontend, wybór między direct API URL a relatywnym `/api` |
-| `TERRAZONING_API_BASE_URL` | variable | nie | `https://terrazoning-api-56hnekgh5a-ew.a.run.app` | workflow frontend, jawny override API URL |
+| `TERRAZONING_API_BASE_URL` | variable | nie | `http://localhost:8000` | workflow frontend, jawny override API URL dla trybu proxy-only |
 | `TERRAZONING_MAP_STYLE_URL` | variable | nie | `https://tiles.openfreemap.org/styles/liberty` | workflow frontend, `cloudbuild.frontend.yaml`, mapa w UI |
 
 ### Interpretacja opcji
 
 - `TERRAZONING_SAME_ORIGIN_API=false`
-  - obecny tryb jest poprawny dla bezpośrednich URL-i Cloud Run
-- `TERRAZONING_API_BASE_URL`
-  - zabezpiecza frontend przed błędnym auto-resolve backendu
+  - przy braku `LB + IAP` frontend nie używa relatywnego `/api`
+- `TERRAZONING_API_BASE_URL=http://localhost:8000`
+  - frontend jest buildowany pod lokalny backend proxy
 - `TERRAZONING_MAP_STYLE_URL`
   - przypina styl mapy do OpenFreeMap Liberty
 

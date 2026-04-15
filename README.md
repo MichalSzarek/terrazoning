@@ -258,19 +258,31 @@ Docelowy model:
 - istniejąca baza `terrazoning` na współdzielonym Cloud SQL
 - opcjonalnie `LB + IAP` z relatywnym `/api`
 
+Aktualny model dostępu jest proxy-only:
+- Cloud Run URL-e nie są ścieżką codziennego użycia
+- frontend i backend uruchamiaj lokalnie przez `gcloud run services proxy`
+- `LB + IAP` pozostaje docelowym kolejnym krokiem, gdy pojawi się własna domena
+
 ### Dostęp lokalny przez proxy do Cloud Run
 
 Usługi są wdrożone na GCP Cloud Run. Aby uzyskać do nich dostęp lokalnie przez proxy:
 
 ```bash
-gcloud auth login
-gcloud config set project maths-489717
+cd /Users/michalszarek/worksapace/terrazoning
+make gcp-auth
+make gcp-proxy
 ```
+
+Następnie otwórz:
+- **http://localhost:5173**
+- **http://localhost:8000/docs**
+
+Jeśli wolisz uruchamiać proxy osobno:
 
 #### TerraZoning Frontend (port 5173)
 
 ```bash
-gcloud run services proxy terrazoning-frontend --region=europe-west1 --port=5173
+make gcp-proxy-frontend
 ```
 
 Następnie otwórz: **http://localhost:5173**
@@ -278,17 +290,10 @@ Następnie otwórz: **http://localhost:5173**
 #### TerraZoning API (port 8000)
 
 ```bash
-gcloud run services proxy terrazoning-api --region=europe-west1 --port=8000
+make gcp-proxy-api
 ```
 
 Następnie otwórz: **http://localhost:8000/docs**
-
-Możesz też użyć gotowych targetów:
-
-```bash
-make gcp-proxy-frontend
-make gcp-proxy-api
-```
 
 **Wymagania:** `gcloud auth login` oraz dostęp do projektu `maths-489717`.
 
@@ -319,7 +324,7 @@ Poniżej jest stan **aktualnie skonfigurowany** w repo `MichalSzarek/terrazoning
 | `CLOUD_BUILD_SERVICE_ACCOUNT` | variable | tak | `projects/maths-489717/serviceAccounts/478521031206-compute@developer.gserviceaccount.com` | workflow backend/frontend, `Makefile`, Cloud Build runtime |
 | `TERRAZONING_FUTURE_BUILDABILITY_ENABLED` | variable | nie | `true` | workflow frontend, `cloudbuild.frontend.yaml`, frontend feature flags |
 | `TERRAZONING_SAME_ORIGIN_API` | variable | nie | `false` | workflow frontend, wybór między direct API URL a relatywnym `/api` |
-| `TERRAZONING_API_BASE_URL` | variable | nie | `https://terrazoning-api-56hnekgh5a-ew.a.run.app` | workflow frontend, jawny override API URL |
+| `TERRAZONING_API_BASE_URL` | variable | nie | `http://localhost:8000` | workflow frontend, jawny override API URL dla trybu proxy-only |
 | `TERRAZONING_MAP_STYLE_URL` | variable | nie | `https://tiles.openfreemap.org/styles/liberty` | workflow frontend, `cloudbuild.frontend.yaml`, mapa w UI |
 
 #### Co oznaczają opcjonalne zmienne
@@ -328,8 +333,8 @@ Poniżej jest stan **aktualnie skonfigurowany** w repo `MichalSzarek/terrazoning
   - zostawia segment `future_buildable` w UI włączony podczas builda frontu
 - `TERRAZONING_SAME_ORIGIN_API=false`
   - obecny tryb bootstrapowy; frontend używa bezpośredniego URL API zamiast relatywnego `/api`
-- `TERRAZONING_API_BASE_URL=https://terrazoning-api-56hnekgh5a-ew.a.run.app`
-  - wymusza aktualny Cloud Run URL backendu przy deployu frontu
+- `TERRAZONING_API_BASE_URL=http://localhost:8000`
+  - wymusza lokalny backend proxy przy deployu frontu dla trybu proxy-only
 - `TERRAZONING_MAP_STYLE_URL=https://tiles.openfreemap.org/styles/liberty`
   - jawnie przypina obecny produkcyjny styl mapy
 

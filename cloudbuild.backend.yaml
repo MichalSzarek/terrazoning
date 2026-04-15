@@ -57,7 +57,10 @@ steps:
           --region "${_REGION}" \
           --project "${_PROJECT_ID}" \
           --format='value(status.url)')"
-        curl --fail --show-error --silent "$${service_url}/api/v1/health" >/dev/null
+        token="$$(gcloud auth print-identity-token --audiences="$${service_url}")"
+        curl --fail --show-error --silent \
+          -H "Authorization: Bearer $${token}" \
+          "$${service_url}/api/v1/health" >/dev/null
 
   - name: gcr.io/google.com/cloudsdktool/cloud-sdk:slim
     entrypoint: bash
