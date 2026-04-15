@@ -280,12 +280,12 @@ gcp-service-urls:
 
 gcp-smoke-api:
 	@API_URL=$$(gcloud run services describe $(TERRAZONING_API_SERVICE) --project $(GCP_PROJECT_ID) --region $(GCP_REGION) --format='value(status.url)'); \
-	TOKEN=$$(gcloud auth print-identity-token --audiences "$${API_URL}"); \
+	TOKEN=$$(gcloud auth print-identity-token); \
 	curl --fail --show-error --silent -H "Authorization: Bearer $${TOKEN}" "$${API_URL}/api/v1/health" >/dev/null && echo "API smoke check ok: $${API_URL}"
 
 gcp-smoke-frontend:
 	@FRONTEND_URL=$$(gcloud run services describe $(TERRAZONING_FRONTEND_SERVICE) --project $(GCP_PROJECT_ID) --region $(GCP_REGION) --format='value(status.url)'); \
-	TOKEN=$$(gcloud auth print-identity-token --audiences "$${FRONTEND_URL}"); \
+	TOKEN=$$(gcloud auth print-identity-token); \
 	curl --fail --show-error --silent -H "Authorization: Bearer $${TOKEN}" "$${FRONTEND_URL}" >/dev/null && echo "Frontend smoke check ok: $${FRONTEND_URL}"
 
 gcp-auth:

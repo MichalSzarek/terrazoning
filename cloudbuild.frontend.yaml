@@ -59,7 +59,7 @@ steps:
           --region "${_REGION}" \
           --project "${_PROJECT_ID}" \
           --format='value(status.url)')"
-        token="$$(gcloud auth print-identity-token --audiences="$${service_url}")"
+        token="$$(gcloud auth print-identity-token)"
         curl --fail --show-error --silent \
           -H "Authorization: Bearer $${token}" \
           "$${service_url}" >/dev/null
