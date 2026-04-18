@@ -1,5 +1,4 @@
 from datetime import date, datetime, timezone
-from urllib.parse import parse_qs, urlparse
 from uuid import UUID, uuid4
 
 from fastapi import FastAPI
@@ -7,6 +6,7 @@ from fastapi.testclient import TestClient
 
 from app.api.v1.leads import router as leads_router
 from app.core.database import get_db
+from app.services.ekw_links import EKW_SEARCH_BASE_URL
 
 
 class _FakeResult:
@@ -114,14 +114,9 @@ def test_list_leads_includes_kw_fields_when_raw_kw_is_present() -> None:
     assert response.status_code == 200
     body = response.json()
     props = body["features"][0]["properties"]
-    parsed = urlparse(props["ekw_search_url"])
-    query = parse_qs(parsed.query)
 
     assert props["kw_number"] == "KR1B/00079684/3"
-    assert query["kodEci"] == ["KR1B"]
-    assert query["kodWydzialuInput"] == ["KR1B"]
-    assert query["numerKW"] == ["00079684"]
-    assert query["cyfraKontrolna"] == ["3"]
+    assert props["ekw_search_url"] == EKW_SEARCH_BASE_URL
 
 
 def test_get_lead_returns_null_kw_fields_when_raw_kw_is_missing() -> None:

@@ -327,7 +327,7 @@ export function LeadDetail({ feature, onBack }: LeadDetailProps) {
                     className="inline-flex items-center gap-1.5 rounded border border-cyan-500/30 bg-cyan-500/10 px-2.5 py-1.5 text-[11px] font-medium text-cyan-200 transition-colors hover:border-cyan-400/50 hover:bg-cyan-500/15"
                   >
                     <ExternalLink size={11} aria-hidden />
-                    Otwórz EKW (beta)
+                    Otwórz wyszukiwarkę EKW
                   </a>
                 )}
                 {kwCopyStatus === 'copied' && (
@@ -340,7 +340,7 @@ export function LeadDetail({ feature, onBack }: LeadDetailProps) {
                 )}
               </div>
               <p className="mt-2 text-[11px] text-gray-500">
-                Portal EKW jest zewnętrzny, a prefill działa w trybie best-effort. Jeśli formularz nie uzupełni się poprawnie, numer KW jest gotowy do wklejenia.
+                Portal EKW jest zewnętrzny i nie wspiera stabilnego prefill przez link. Otwieramy oficjalną wyszukiwarkę, a numer KW jest gotowy do wklejenia.
               </p>
             </div>
           )}
