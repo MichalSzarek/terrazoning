@@ -9,7 +9,7 @@ from sqlalchemy import or_, select
 
 from app.core.database import AsyncSessionLocal
 from app.models.silver import Dzialka, ListingParcel
-from app.services.operations_scope import province_teryt_prefix
+from app.services.operations_scope import province_teryt_prefix, provinces
 from app.services.future_buildability_engine import run_future_buildability_engine
 
 
@@ -22,7 +22,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         "--province",
         action="append",
         dest="provinces",
-        help="Optional province scope: slaskie | malopolskie",
+        choices=provinces(),
+        help="Optional province scope",
     )
     return parser.parse_args(argv)
 

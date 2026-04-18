@@ -117,6 +117,8 @@ _LEADS_QUERY = text(
         il.listing_id,
         rl.source_url,
         rl.raw_kw,
+        rl.source_type,
+        rl.auction_date,
         il.evidence_chain,
         il.signal_breakdown,
         il.created_at,
@@ -341,6 +343,30 @@ def _future_buildability_explainability(
     )
 
 
+def _derive_source_status(
+    *,
+    source_url: str | None,
+    source_type: str | None,
+    auction_date: Any | None,
+    now_utc: datetime,
+) -> tuple[str | None, str | None]:
+    if not source_url:
+        return None, None
+
+    expires_at = auction_date.isoformat() if auction_date is not None else None
+    lowered_url = source_url.lower()
+    lowered_type = (source_type or "").lower()
+
+    if "licytacje.komornik.pl" in lowered_url or lowered_type == "komornik":
+        if auction_date is not None and auction_date < now_utc.date():
+            return "expired", expires_at
+        if auction_date is not None:
+            return "live", expires_at
+        return "unknown", None
+
+    return "unknown", expires_at
+
+
 def _decode_geojson_geometry(raw_geometry: Any) -> Optional[GeoJSONGeometry]:
     """Normalize asyncpg/SQLAlchemy JSON output into a typed GeoJSON geometry."""
 
@@ -528,6 +554,7 @@ async def list_leads(
 
     # Build GeoJSON features
     features: list[LeadFeature] = []
+    now_utc = datetime.now(timezone.utc)
     for row in rows:
         geometry = _decode_geojson_geometry(row["geometry"])
         display_point = _decode_geojson_geometry(row["display_point"])
@@ -560,6 +587,12 @@ async def list_leads(
             confidence_band=row["confidence_band"],
             signal_breakdown=row["signal_breakdown"] or [],
             dominant_future_signal=row["dominant_future_signal"],
+        )
+        source_status, source_expires_at = _derive_source_status(
+            source_url=row["source_url"],
+            source_type=row["source_type"],
+            auction_date=row["auction_date"],
+            now_utc=now_utc,
         )
 
         props = LeadProperties(
@@ -624,6 +657,8 @@ async def list_leads(
             source_url=row["source_url"],
             kw_number=row["raw_kw"],
             ekw_search_url=build_ekw_search_url(row["raw_kw"]),
+            source_status=source_status,
+            source_expires_at=source_expires_at,
             evidence_chain=row["evidence_chain"] or [],
             signal_breakdown=row["signal_breakdown"] or [],
             created_at=row["created_at"],
@@ -742,6 +777,12 @@ async def get_lead(
             signal_breakdown=row["signal_breakdown"] or [],
             dominant_future_signal=row["dominant_future_signal"],
         )
+        source_status, source_expires_at = _derive_source_status(
+            source_url=row["source_url"],
+            source_type=row["source_type"],
+            auction_date=row["auction_date"],
+            now_utc=datetime.now(timezone.utc),
+        )
         props = LeadProperties(
             price_signal=price_signal,
             quality_signal=quality_signal,
@@ -777,6 +818,8 @@ async def get_lead(
             source_url=row["source_url"],
             kw_number=row["raw_kw"],
             ekw_search_url=build_ekw_search_url(row["raw_kw"]),
+            source_status=source_status,
+            source_expires_at=source_expires_at,
             evidence_chain=row["evidence_chain"] or [],
             signal_breakdown=row["signal_breakdown"] or [],
             created_at=row["created_at"],

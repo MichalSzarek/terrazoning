@@ -40,6 +40,18 @@ logger = logging.getLogger(__name__)
 _WMS_TIMEOUT_S = 30.0
 _DEFAULT_SAMPLE_GRID = 5
 _DEFAULT_HALFSPAN_M = 6.0
+_BROWSER_HEADERS = {
+    "User-Agent": (
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) "
+        "Chrome/135.0.0.0 Safari/537.36"
+    ),
+    "Accept": (
+        "text/html,application/xhtml+xml,application/xml;q=0.9,"
+        "image/avif,image/webp,*/*;q=0.8"
+    ),
+    "Accept-Language": "pl,en-US;q=0.9,en;q=0.8",
+}
 
 
 @dataclass
@@ -247,7 +259,37 @@ def parse_gison_portal_html_metadata(body: str) -> dict[str, str | None] | None:
     ):
         legend_url = match.group(1).strip()
 
-    if not any((plan_name, uchwala_nr, legend_url)) and "MPZP" not in text.upper():
+    # APP `view_gml.php` pages expose plan metadata through nested HTML rather
+    # than the GISON popup structure. We accept the same metadata contract so
+    # the existing fallback_designation path can be reused safely.
+    if not plan_name and (
+        match := re.search(
+            r"<b>\s*tytul\s*</b>.*?<div class='span0'>\s*(.*?)\s*</div>",
+            text,
+            re.IGNORECASE | re.DOTALL,
+        )
+    ):
+        plan_name = _clean_html_text(match.group(1))
+
+    if not uchwala_nr and (
+        match := re.search(
+            r"<b>\s*lokalnyId\s*</b>.*?<div class='span0'>\s*(.*?)\s*</div>",
+            text,
+            re.IGNORECASE | re.DOTALL,
+        )
+    ):
+        uchwala_nr = _clean_html_text(match.group(1))
+
+    if not legend_url and (
+        match := re.search(
+            r"<b>\s*legenda\s*</b>.*?<div[^>]*class=['\"]span0['\"][^>]*>\s*(https?://[^<\\s]+)\s*</div>",
+            text,
+            re.IGNORECASE | re.DOTALL,
+        )
+    ):
+        legend_url = match.group(1).strip()
+
+    if not any((plan_name, uchwala_nr, legend_url)) and "MPZP" not in text.upper() and "APP" not in text.upper():
         return None
 
     return {
@@ -296,6 +338,7 @@ class WMSGridIngestor:
             timeout=httpx.Timeout(_WMS_TIMEOUT_S),
             follow_redirects=True,
             verify=self._verify,
+            headers=_BROWSER_HEADERS,
         )
 
     async def aclose(self) -> None:

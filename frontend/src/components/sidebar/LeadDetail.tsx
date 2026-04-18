@@ -182,6 +182,14 @@ export function LeadDetail({ feature, onBack }: LeadDetailProps) {
     p.source_url
     ?? sourceStep?.url
     ?? null;
+  const sourceExpired = p.source_status === 'expired';
+  const sourceExpiresLabel = p.source_expires_at
+    ? new Date(p.source_expires_at).toLocaleDateString('pl-PL', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+      })
+    : null;
 
   const formattedArea = p.area_m2 != null
     ? p.area_m2 >= 10_000
@@ -267,15 +275,32 @@ export function LeadDetail({ feature, onBack }: LeadDetailProps) {
           </p>
           <p className="mt-1 text-xs text-gray-500">{p.teryt_gmina}</p>
           {sourceUrl && (
-            <a
-              href={sourceUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="mt-3 inline-flex items-center gap-1.5 rounded border border-blue-500/30 bg-blue-500/10 px-2.5 py-1.5 text-[11px] font-medium text-blue-300 transition-colors hover:border-blue-400/50 hover:bg-blue-500/15 hover:text-blue-200"
-            >
-              <ExternalLink size={11} aria-hidden />
-              Otwórz aukcję
-            </a>
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              <a
+                href={sourceUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className={[
+                  'inline-flex items-center gap-1.5 rounded border px-2.5 py-1.5 text-[11px] font-medium transition-colors',
+                  sourceExpired
+                    ? 'border-amber-500/30 bg-amber-500/10 text-amber-200 hover:border-amber-400/50 hover:bg-amber-500/15'
+                    : 'border-blue-500/30 bg-blue-500/10 text-blue-300 hover:border-blue-400/50 hover:bg-blue-500/15 hover:text-blue-200',
+                ].join(' ')}
+              >
+                <ExternalLink size={11} aria-hidden />
+                {sourceExpired ? 'Spróbuj otworzyć archiwalne ogłoszenie' : 'Otwórz aukcję'}
+              </a>
+              {sourceExpired && (
+                <span className="inline-flex rounded border border-amber-500/20 bg-amber-500/10 px-2 py-1 text-[10px] font-medium uppercase tracking-wider text-amber-200">
+                  Ogłoszenie wygasło{sourceExpiresLabel ? ` · ${sourceExpiresLabel}` : ''}
+                </span>
+              )}
+            </div>
+          )}
+          {sourceExpired && (
+            <p className="mt-2 text-[11px] text-amber-200/80">
+              Link źródłowy pochodzi z portalu komorniczego i po dacie licytacji może zwracać `404`.
+            </p>
           )}
           {p.kw_number && (
             <div className="mt-3 rounded-xl border border-cyan-500/15 bg-cyan-500/5 px-3 py-3">

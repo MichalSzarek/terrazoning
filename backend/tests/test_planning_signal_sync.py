@@ -99,6 +99,52 @@ def test_html_index_registry_includes_plan_ogolny_sources() -> None:
     assert "https://nowywisnicz.pl/aktualnosci/planowanie-przestrzenne/" in urls
     assert "https://nowywisnicz.e-mapa.net/implementation/nowywisnicz/pln/pelna_tresc/000.pdf" in urls
     assert "https://nowy-wisnicz.geoportal-krajowy.pl/plan-ogolny" in urls
+    assert "https://www.brzesko.pl/wpis/87444%2Copracowanie-planu-ogolnego-zagospodarowania-przestrzennego-dla-gminy-brzesko" in urls
+    assert "https://brzesko.geoportal-krajowy.pl/mpzp" in urls
+    assert "https://www.brzesko.pl/artykul/222%2Cplanowanie-przestrzenne" in urls
+    assert "https://jaslo.e-mapa.net/wykazplanow/" in urls
+    assert "https://rejestrplanowogolnych.pl/?teryt=180504_2" in urls
+    assert "https://rastry.gison.pl/mpzp-public/jaslogmina/uchwaly/U_2018_433_LXVIII_studium.pdf" in urls
+    assert "https://uglezajsk.bip.gov.pl/mpzp-giedlarowa/o-b-w-i-e-s-z-c-z-e-n-i-e-wojta-gminy-lezajsk-z-dnia-27-02-2024-o-przystapieniu-do-sporzadzania-miejscowego-planu-zagospodarowania-przestrzennego-terenu-wsi-giedlarowa.html" in urls
+    assert "https://uglezajsk.bip.gov.pl/planowanie-przestrzenne/zbiory-danych-przestrzennych/zbior-app-dla-mpz/zbior-danych-mpzp-makemaker.html" in urls
+    assert "https://uglezajsk.bip.gov.pl/planowanie-przestrzenne/zbiory-danych-przestrzennych/zbior-app-dla-studium/zbior-danych-app-dla-studium-makemaker.html" in urls
+    assert "https://bip.boguchwala.pl/pl/404-menu-tematyczne/12304-planowanie-przestrzenne.html" in urls
+    assert "https://boguchwala.geoportal-krajowy.pl/plan-ogolny" in urls
+    assert "https://rastry.gison.pl/mpzp-public/boguchwala/uchwaly/U_2020_354_XXIX_studium_tekst.pdf" in urls
+    assert "https://rastry.gison.pl/mpzp-public/boguchwala/uchwaly/U_2019_218_XV.pdf" in urls
+    assert "https://www.ugradymno.pl/asp/plan-ogolny-informacje%2C1%2Cartykul%2C1%2C1625" in urls
+    assert "https://www.ugradymno.pl/asp/core/pdf.asp?akcja=artykul&artykul=1551&menu=1" in urls
+    assert "https://radymno.geoportal-krajowy.pl/plan-ogolny" in urls
+    assert "https://radymno.geoportal-krajowy.pl/mpzp" in urls
+    assert "https://bip.tarnowiec.eu/planowanie-przestrzenne/238" in urls
+    assert "https://bip.tarnowiec.eu/projekty-mpzp/290" in urls
+    assert "https://tarnowiec.eu/aktualnosc-4123-przystapienie_do_sporzadzenia_planu.html" in urls
+    assert "https://gminadebica.e-mapa.net/wykazplanow/" in urls
+    assert "https://jodlowa.e-mapa.net/wykazplanow/" in urls
+    assert "https://dukla.e-mapa.net/wykazplanow/" in urls
+    assert "https://dukla.geoportal-krajowy.pl/plan-ogolny" in urls
+    assert "https://www.dukla.pl/pl/dla-mieszkancow/mapy-i-plany-79/wnioski-do-planu-ogolnego-226" in urls
+    assert "https://www.dukla.pl/files/_source/2025/01/ogloszenie%20na%20BIP%20i%20na%20strone%20gminy.pdf" in urls
+    assert "https://narol.geoportal-krajowy.pl/plan-ogolny" in urls
+    assert "https://narol.geoportal-krajowy.pl/mpzp" in urls
+    assert "https://debica.geoportal-krajowy.pl/" in urls
+    assert "https://debica.geoportal-krajowy.pl/mpzp" in urls
+    assert "https://jodlowa.geoportal-krajowy.pl/" in urls
+    assert "https://jodlowa.geoportal-krajowy.pl/plan-ogolny" in urls
+    assert "https://pilzno.geoportal-krajowy.pl/" in urls
+    assert "https://pilzno.geoportal-krajowy.pl/plan-ogolny" in urls
+    assert "https://pilzno.geoportal-krajowy.pl/mpzp" in urls
+    assert "https://czermin-mielecki.geoportal-krajowy.pl/" in urls
+    assert "https://czermin-mielecki.geoportal-krajowy.pl/plan-ogolny" in urls
+    assert "https://glogow-malopolski.geoportal-krajowy.pl/" in urls
+    assert "https://glogow-malopolski.geoportal-krajowy.pl/mpzp" in urls
+    assert "https://iwierzyce.e-mapa.net/wykazplanow/" in urls
+    assert "https://niebylec.geoportal-krajowy.pl/" in urls
+    assert "https://niebylec.geoportal-krajowy.pl/plan-ogolny" in urls
+    assert "https://strzyzow.geoportal-krajowy.pl/" in urls
+    assert "https://strzyzow.geoportal-krajowy.pl/mpzp" in urls
+    assert "https://grebow.geoportal-krajowy.pl/" in urls
+    assert "https://grebow.geoportal-krajowy.pl/mpzp" in urls
     assert "https://www.wielka-wies.pl/o-gminie/aktualnosci/ogloszenie-plan-ogolny/" in urls
     assert "https://wielka-wies.geoportal-krajowy.pl/plan-ogolny" in urls
     assert "https://old.wielka-wies.pl/media/191132/zal-1-wielka-wies-studium-tekst-ujednolicony.pdf" in urls
@@ -148,6 +194,9 @@ def test_html_index_registry_includes_plan_ogolny_sources() -> None:
     assert "https://www.kozieglowy.pl/aktualnosci/4985" in urls
     assert "https://www.ksiazwielki.eu/index.php/dla-mieszkanca/ogloszenia-i-komunikaty/528-ogloszenie-o-rozpoczeciu-konsultacji-spolecznych-projektu-planu-ogolnego-miasta-i-gminy-ksiaz-wielki" in urls
     assert "https://e-mapa.net/plan_ogolny/120804-ksiaz-wielki" in urls
+    assert "https://www.ugnowytarg.pl/strefy/planowanie-przestrzenne-i-budownictwo/plan-ogolny-gminy-nowy-targ" in urls
+    assert "https://nowy-targ.geoportal-krajowy.pl/mpzp" in urls
+    assert "https://www.ugnowytarg.pl/assets/nowyTarg/media/files/c631ccc3-2fff-4b45-9bce-5bb9f6273fcd/zal-nr-1-tekst-zmiany-studium.pdf" in urls
     assert "https://www.orzesze.pl/a%2C1695%2Cprzystapienie-do-sporzadzania-planu-ogolnego-zagospodarowania-przestrzennego-miasta-orzesze" in urls
     assert "https://morzesze.e-mapa.net/legislacja/mpzp/8647.html" in urls
     assert "https://www.bip.wreczyca-wielka.akcessnet.net/index.php?a=0&id=587&idg=3&x=65&y=10" in urls
@@ -281,6 +330,31 @@ def test_parse_generic_planning_page_signal_classifies_mpzp_project() -> None:
     assert signal.plan_name == "MPZP 2414042"
     assert signal.designation_normalized == "unknown"
     assert signal.legal_weight == 0
+
+
+def test_parse_generic_planning_page_signal_detects_geoportal_krajowy_mpzp_registry() -> None:
+    page = (
+        '{"mpzpData":[0,{"totalAmount":[0,14],"mpzpRegistry":[1,['
+        '[0,{"name":[0,"Uchwała nr XLVI/17/2022 Rady Gminy Radymno z dnia 24 lutego 2022 r. '
+        'w sprawie uchwalenia miejscowego planu zagospodarowania przestrzennego Sośnica 2"]}],'
+        '[0,{"name":[0,"Uchwała nr XXXI/17/2021 Rady Gminy Radymno w sprawie uchwalenia '
+        'miejscowego planu zagospodarowania przestrzennego Zaleska Wola I"]}]'
+        ']}]}'
+    )
+    source = HtmlIndexSignalSource(
+        teryt_gmina="1804082",
+        source_url="https://radymno.geoportal-krajowy.pl/mpzp",
+        label="Radymno MPZP registry",
+    )
+    signal = _parse_generic_planning_page_signal(page, source)
+    assert signal is not None
+    assert signal.signal_kind == "planning_resolution"
+    assert signal.signal_status == "formal_binding"
+    assert signal.designation_raw == "MPZP"
+    assert signal.plan_name == "MPZP registry 1804082"
+    assert signal.source_url == source.source_url
+    assert signal.evidence_chain[0]["registry_count"] == 14
+    assert "Sośnica 2" in (signal.description or "")
 
 
 def test_parse_generic_planning_page_signal_reads_positive_symbols_from_pdf_text() -> None:

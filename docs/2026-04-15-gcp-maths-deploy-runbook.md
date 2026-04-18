@@ -122,13 +122,30 @@ make gcp-job-campaign-rollout
 
 ### Z argumentami
 
-`GCP_JOB_ARGS` przekazuj jako pojedynczy string argumentów rozdzielonych przecinkami, np.:
+`GCP_JOB_ARGS` przekazuj jako pojedynczy string argumentów rozdzielonych przecinkami.
+Makefile automatycznie prepina bazowe `uv run --project ... python ...`, więc w `GCP_JOB_ARGS`
+podajemy tylko argumenty samego skryptu, np.:
 
 ```bash
 make gcp-job-planning-signal-sync GCP_JOB_ARGS="--teryt,2414021"
 make gcp-job-future-buildability GCP_JOB_ARGS="--province,slaskie,--batch-size,250"
 make gcp-job-campaign-rollout GCP_JOB_ARGS="--province,slaskie,--autofix,--parallel"
 ```
+
+### Podkarpackie rollout opt-in
+
+`podkarpackie` utrzymujemy nadal jako rollout manualny. Do pierwszych kampanii i targeted rerunów używamy osobnych wywołań jobów:
+
+```bash
+make gcp-job-scrape-live GCP_JOB_ARGS="--provinces,podkarpackie,--max-pages,3"
+make gcp-job-planning-signal-sync GCP_JOB_ARGS="--teryt,1816035"
+make gcp-job-future-buildability GCP_JOB_ARGS="--province,podkarpackie,--batch-size,250"
+make gcp-job-campaign-rollout GCP_JOB_ARGS="--province,podkarpackie,--autofix,--parallel"
+```
+
+To pozwala nadpisywać scope joba bez utraty domyślnego entrypointu Cloud Run Job.
+
+Do stałego schedulera dokładamy `podkarpackie` dopiero po kilku stabilnych przebiegach i po potwierdzeniu, że kolejne gminy mają realne, publiczne źródła geometrii planistycznej.
 
 ## 5. Scheduler cadence
 

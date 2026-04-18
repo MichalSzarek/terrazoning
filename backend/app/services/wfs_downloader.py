@@ -595,6 +595,11 @@ class WFSClient:
             "{http://www.opengis.net/gml}featureMember",
         ]
 
+        def _local_tag(value: Any) -> str:
+            if not isinstance(value, str):
+                return ""
+            return value.split("}")[-1] if "}" in value else value
+
         members: list = []
         for tag in _MEMBER_TAGS:
             members = root.findall(tag)
@@ -605,6 +610,8 @@ class WFSClient:
             for tag in [
                 "{http://www.opengis.net/wfs/2.0}members",
                 "{http://www.opengis.net/wfs}featureMembers",
+                "{http://www.opengis.net/gml/3.2}featureMembers",
+                "{http://www.opengis.net/gml}featureMembers",
             ]:
                 container = root.find(tag)
                 if container is not None:
@@ -614,18 +621,23 @@ class WFSClient:
             # Last resort: direct non-bounding children
             members = [
                 c for c in root
-                if not (c.tag.split("}")[-1] if "}" in c.tag else c.tag)
-                .startswith("boundedBy")
+                if not _local_tag(c.tag).startswith("boundedBy")
             ]
 
         features: list[dict[str, Any]] = []
         for member in members:
-            feature_el = member[0] if len(member) else member
+            member_local = _local_tag(member.tag)
+            if member_local in {"member", "featureMember"}:
+                feature_el = member[0] if len(member) else member
+            else:
+                feature_el = member
             props: dict[str, Any] = {}
             geom_shapely = None
 
             for child in feature_el:
-                local = child.tag.split("}")[-1] if "}" in child.tag else child.tag
+                local = _local_tag(child.tag)
+                if not local:
+                    continue
                 geom = _try_parse_gml_geometry(child, _GML_NS)
                 if geom is not None:
                     geom_shapely = geom
@@ -686,10 +698,16 @@ class WFSClient:
             geom = make_valid(geom)
             logger.debug("[WFS] Applied make_valid on %r", przeznaczenie)
 
+        # Some municipal services expose EPSG:2180 geometries with northing/easting
+        # order, so apply the axis swap before any reprojection and even when the
+        # source CRS already equals the target CRS.
+        if swap_xy:
+            geom = shapely_transform(lambda x, y, *args: (y, x), geom)
+
         # Reproject to EPSG:2180 if source is different
         if source_srid != 2180:
             try:
-                geom = _reproject_to_2180(geom, source_srid, swap_xy=swap_xy)
+                geom = _reproject_to_2180(geom, source_srid, swap_xy=False)
             except Exception as exc:
                 logger.warning(
                     "[WFS] Reprojection from EPSG:%d to 2180 failed: %s",

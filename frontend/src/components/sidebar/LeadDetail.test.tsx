@@ -84,6 +84,8 @@ function makeFeature(overrides?: Partial<LeadFeature['properties']>): LeadFeatur
       kw_number: 'KR1B/00079684/3',
       ekw_search_url:
         'https://przegladarka-ekw.ms.gov.pl/eukw_prz/KsiegiWieczyste/wyszukiwanieKW?komunikaty=true&kontakt=true&okienkoSerwisowe=false&kodEci=KR1B&kodWydzialuInput=KR1B&numerKW=00079684&cyfraKontrolna=3',
+      source_status: 'live',
+      source_expires_at: null,
       evidence_chain: [],
       signal_breakdown: [],
       created_at: '2026-04-18T12:00:00Z',

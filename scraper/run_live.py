@@ -8,8 +8,11 @@ Usage:
     # Single province, one page (safest first run):
     python run_live.py --provinces slaskie --max-pages 1
 
-    # Both target provinces, two pages each:
+    # Current rollout provinces, two pages each:
     python run_live.py --provinces slaskie malopolskie --max-pages 2
+
+    # Opt-in rollout for Podkarpackie:
+    python run_live.py --provinces podkarpackie --max-pages 2
 
     # Dry-run: fetch + parse only, no DB writes (good for verifying selectors):
     python run_live.py --dry-run --provinces slaskie --max-pages 1 --verbose
@@ -82,6 +85,7 @@ from scraper.komornik_crawler import (  # noqa: E402
 _PROVINCE_MAP: dict[str, str] = {
     "malopolskie": "małopolskie",
     "małopolskie": "małopolskie",
+    "podkarpackie": "podkarpackie",
     "slaskie":     "śląskie",
     "śląskie":     "śląskie",
 }
@@ -98,7 +102,7 @@ def _parse_args() -> argparse.Namespace:
         nargs="+",
         default=list(_PROVINCE_IDS.keys()),
         metavar="PROVINCE",
-        help="Provinces to crawl. Choices: malopolskie, slaskie  (default: both)",
+        help="Provinces to crawl. Choices: malopolskie, podkarpackie, slaskie (default: all configured)",
     )
     p.add_argument(
         "--max-pages",

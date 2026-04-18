@@ -140,11 +140,11 @@ uv sync
 # Dry-run: pobierz i parsuj 1 stronę, bez zapisu do DB
 uv run python run_live.py --dry-run --provinces slaskie --max-pages 1 --verbose
 
-# Właściwy scrape: obie prowincje, 2 strony (≈40 ogłoszeń)
-uv run python run_live.py --provinces slaskie malopolskie --max-pages 2
+# Właściwy scrape: trzy prowincje, 2 strony
+uv run python run_live.py --provinces slaskie malopolskie podkarpackie --max-pages 2
 
-# Pełny sweep (3 strony × 2 prowincje ≈ 86 ogłoszeń grunty)
-uv run python run_live.py --provinces slaskie malopolskie --max-pages 3
+# Pełny sweep (3 strony × 3 prowincje)
+uv run python run_live.py --provinces slaskie malopolskie podkarpackie --max-pages 3
 ```
 
 Oczekiwany wynik:
@@ -395,6 +395,7 @@ Są dwa poprawne tryby produkcyjne:
 Szczegółowy plan i runbook:
 - [2026-04-15-gcp-maths-deployment-plan.md](/Users/michalszarek/worksapace/terrazoning/docs/2026-04-15-gcp-maths-deployment-plan.md)
 - [2026-04-15-gcp-maths-deploy-runbook.md](/Users/michalszarek/worksapace/terrazoning/docs/2026-04-15-gcp-maths-deploy-runbook.md)
+- [2026-04-15-terrazoning-uptodate-runbook.md](/Users/michalszarek/worksapace/terrazoning/docs/2026-04-15-terrazoning-uptodate-runbook.md)
 
 Otwórz **http://localhost:5173**
 
@@ -513,7 +514,7 @@ cd frontend && npm run dev
 
 ```bash
 # 1. Nowe ogłoszenia (live)
-cd scraper && uv run python run_live.py --provinces slaskie malopolskie --max-pages 3
+cd scraper && uv run python run_live.py --provinces slaskie malopolskie podkarpackie --max-pages 3
 
 # 2. Rozwiązanie geometrii
 cd backend && uv run python -m app.services.geo_resolver
@@ -529,6 +530,26 @@ cd backend && uv run python -m app.services.delta_engine
 ```
 
 Odśwież stronę — mapa zaktualizuje się automatycznie (TanStack Query, staleTime=30s).
+
+### Podkarpackie — regularny scope
+
+`Podkarpackie` jest już częścią regularnego scope operacyjnego. Nadal warto mieć pod ręką osobne komendy operatorskie dla targeted rerunów i source discovery:
+
+```bash
+cd /Users/michalszarek/worksapace/terrazoning
+
+make scrape-live PROVINCES="podkarpackie" MAX_PAGES=3
+make report-podkarpackie
+make future-buildability-status PROVINCE=podkarpackie
+make future-buildability-backlog PROVINCE=podkarpackie BACKLOG_FORMAT=csv
+make campaign-podkarpackie
+```
+
+Jeśli potrzebujesz ograniczyć MPZP/WFS sync tylko do tego województwa:
+
+```bash
+make sync-podkarpackie
+```
 
 ### Filtrowanie leadów przez API
 
@@ -616,7 +637,7 @@ docker exec terrazoning_db psql -U terrazoning -d terrazoning \
   -c "SELECT COUNT(*) FROM gold.planning_zones;"
 
 # Uruchom pipeline
-cd scraper  && uv run python run_live.py --provinces slaskie malopolskie --max-pages 3
+cd scraper  && uv run python run_live.py --provinces slaskie malopolskie podkarpackie --max-pages 3
 cd backend  && uv run python -m app.services.geo_resolver
 cd backend  && uv run python seed_test_zones.py   # syntetyczne strefy MPZP
 cd backend  && uv run python -m app.services.delta_engine

@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from urllib.parse import parse_qs, urlparse
 from uuid import UUID, uuid4
 
@@ -86,6 +86,8 @@ def _lead_row(*, lead_id: UUID | None = None, raw_kw: str | None) -> dict:
             "34251/licytacja-nieruchomosci"
         ),
         "raw_kw": raw_kw,
+        "source_type": "licytacja_komornicza",
+        "auction_date": date(2026, 4, 21),
         "evidence_chain": [
             {
                 "step": "source",

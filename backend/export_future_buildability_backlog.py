@@ -16,14 +16,14 @@ from print_future_buildability_status import (
     _load_backlog_rows,
     _load_freshness_snapshot,
 )
-from app.services.operations_scope import province_display_name, province_teryt_prefix
+from app.services.operations_scope import province_display_name, province_teryt_prefix, provinces
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Export future-buildability source discovery backlog")
     parser.add_argument(
         "--province",
-        choices=("slaskie", "malopolskie"),
+        choices=provinces(),
         help="Optional province scope for the exported backlog",
     )
     parser.add_argument(
@@ -97,7 +97,7 @@ async def _main() -> None:
 
     args = parse_args()
     province_prefix = province_teryt_prefix(args.province) if args.province else None
-    province_label = province_display_name(args.province) if args.province else "Śląskie + Małopolskie"
+    province_label = province_display_name(args.province) if args.province else "Wszystkie skonfigurowane województwa"
     payload = await _build_export_payload(province_prefix=province_prefix)
     payload["scope"] = {
         "province": args.province,

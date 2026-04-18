@@ -8,6 +8,11 @@ import unicodedata
 from sqlalchemy import case, func
 
 _PROVINCE_SPECS = {
+    "podkarpackie": {
+        "display_name": "Podkarpackie",
+        "db_label": "podkarpackie",
+        "teryt_prefix": "18",
+    },
     "slaskie": {
         "display_name": "Śląskie",
         "db_label": "śląskie",
