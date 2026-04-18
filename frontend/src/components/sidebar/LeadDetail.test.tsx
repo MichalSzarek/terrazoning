@@ -82,8 +82,7 @@ function makeFeature(overrides?: Partial<LeadFeature['properties']>): LeadFeatur
       source_url:
         'https://licytacje.komornik.pl/wyszukiwarka/obwieszczenia-o-licytacji/34251/licytacja-nieruchomosci',
       kw_number: 'KR1B/00079684/3',
-      ekw_search_url:
-        'https://przegladarka-ekw.ms.gov.pl/eukw_prz/KsiegiWieczyste/wyszukiwanieKW?komunikaty=true&kontakt=true&okienkoSerwisowe=false&kodEci=KR1B&kodWydzialuInput=KR1B&numerKW=00079684&cyfraKontrolna=3',
+      ekw_search_url: 'https://ekw.ms.gov.pl/eukw_ogol/KsiegiWieczyste',
       source_status: 'live',
       source_expires_at: null,
       evidence_chain: [],
@@ -112,11 +111,11 @@ describe('LeadDetail', () => {
     render(<LeadDetail feature={feature} onBack={() => undefined} />);
 
     expect(screen.getByText('KR1B/00079684/3')).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Otwórz EKW (beta)' })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: 'Otwórz wyszukiwarkę EKW' })).toHaveAttribute(
       'href',
       feature.properties.ekw_search_url,
     );
-    expect(screen.getByText(/prefill działa w trybie best-effort/i)).toBeInTheDocument();
+    expect(screen.getByText(/nie wspiera stabilnego prefill przez link/i)).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Kopiuj KW' }));
 
@@ -135,6 +134,6 @@ describe('LeadDetail', () => {
     render(<LeadDetail feature={feature} onBack={() => undefined} />);
 
     expect(screen.queryByRole('button', { name: 'Kopiuj KW' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('link', { name: 'Otwórz EKW (beta)' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Otwórz wyszukiwarkę EKW' })).not.toBeInTheDocument();
   });
 });

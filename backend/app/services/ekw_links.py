@@ -1,37 +1,31 @@
-"""Helpers for building best-effort links to the official EKW search page."""
+"""Helpers for linking to the official EKW search flow."""
 
 from __future__ import annotations
 
 from re import Pattern, compile
 from typing import Final
-from urllib.parse import urlencode
 
 EKW_SEARCH_BASE_URL: Final[str] = (
-    "https://przegladarka-ekw.ms.gov.pl/eukw_prz/KsiegiWieczyste/wyszukiwanieKW"
+    "https://ekw.ms.gov.pl/eukw_ogol/KsiegiWieczyste"
 )
 
 _KW_PATTERN: Final[Pattern[str]] = compile(
-    r"^(?P<court_code>[A-Z]{2}\d[A-Z])/(?P<book_number>\d{8})/(?P<check_digit>\d)$"
+    r"^[A-Z]{2}\d[A-Z]/\d{8}/\d$"
 )
 
 
 def build_ekw_search_url(kw_number: str | None) -> str | None:
-    """Return a best-effort EKW search URL for a canonical KW number."""
+    """Return the official EKW search entry URL for a canonical KW number.
+
+    The public EKW portal currently does not expose a stable deep link that
+    pre-fills the search form, so TerraZoning opens the official search entry
+    point and keeps the canonical KW number ready for copy/paste in the UI.
+    """
 
     if not kw_number:
         return None
 
-    match = _KW_PATTERN.fullmatch(kw_number.strip())
-    if match is None:
+    if _KW_PATTERN.fullmatch(kw_number.strip()) is None:
         return None
 
-    params = {
-        "komunikaty": "true",
-        "kontakt": "true",
-        "okienkoSerwisowe": "false",
-        "kodEci": match.group("court_code"),
-        "kodWydzialuInput": match.group("court_code"),
-        "numerKW": match.group("book_number"),
-        "cyfraKontrolna": match.group("check_digit"),
-    }
-    return f"{EKW_SEARCH_BASE_URL}?{urlencode(params)}"
+    return EKW_SEARCH_BASE_URL
