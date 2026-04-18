@@ -42,6 +42,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import settings
 from app.core.database import get_db
 from app.models.gold import InvestmentLead
+from app.services.ekw_links import build_ekw_search_url
 from app.services.future_buildability_engine import FutureBuildabilityEngine
 from app.services.future_buildability_engine import (
     _derive_next_best_action,
@@ -115,6 +116,7 @@ _LEADS_QUERY = text(
         il.adjacent_buildable_pct,
         il.listing_id,
         rl.source_url,
+        rl.raw_kw,
         il.evidence_chain,
         il.signal_breakdown,
         il.created_at,
@@ -397,6 +399,8 @@ def _decode_geojson_geometry(raw_geometry: Any) -> Optional[GeoJSONGeometry]:
                                     "teryt_gmina": "1412011",
                                     "listing_id": None,
                                     "source_url": None,
+                                    "kw_number": None,
+                                    "ekw_search_url": None,
                                     "evidence_chain": [],
                                     "created_at": "2026-04-04T10:00:00Z",
                                 },
@@ -618,6 +622,8 @@ async def list_leads(
             teryt_gmina=row["teryt_gmina"],
             listing_id=row["listing_id"],
             source_url=row["source_url"],
+            kw_number=row["raw_kw"],
+            ekw_search_url=build_ekw_search_url(row["raw_kw"]),
             evidence_chain=row["evidence_chain"] or [],
             signal_breakdown=row["signal_breakdown"] or [],
             created_at=row["created_at"],
@@ -769,6 +775,8 @@ async def get_lead(
             teryt_gmina=row["teryt_gmina"],
             listing_id=row["listing_id"],
             source_url=row["source_url"],
+            kw_number=row["raw_kw"],
+            ekw_search_url=build_ekw_search_url(row["raw_kw"]),
             evidence_chain=row["evidence_chain"] or [],
             signal_breakdown=row["signal_breakdown"] or [],
             created_at=row["created_at"],

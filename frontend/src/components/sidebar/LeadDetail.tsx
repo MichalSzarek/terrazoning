@@ -10,6 +10,7 @@ import {
   ArrowLeft,
   Building2,
   Coins,
+  Copy,
   MapPin,
   Layers,
   Maximize2,
@@ -143,9 +144,32 @@ function StrategyBadge({
   );
 }
 
+async function copyTextToClipboard(text: string): Promise<void> {
+  if (navigator.clipboard?.writeText) {
+    await navigator.clipboard.writeText(text);
+    return;
+  }
+
+  const textarea = document.createElement('textarea');
+  textarea.value = text;
+  textarea.setAttribute('readonly', 'true');
+  textarea.style.position = 'absolute';
+  textarea.style.left = '-9999px';
+  document.body.appendChild(textarea);
+  textarea.select();
+
+  const copied = document.execCommand('copy');
+  document.body.removeChild(textarea);
+
+  if (!copied) {
+    throw new Error('Clipboard copy failed');
+  }
+}
+
 export function LeadDetail({ feature, onBack }: LeadDetailProps) {
   const p = feature.properties;
   const [notesDraft, setNotesDraft] = useState('');
+  const [kwCopyStatus, setKwCopyStatus] = useState<'idle' | 'copied' | 'error'>('idle');
   const statusMutation = useLeadStatusMutation();
   const futureInsight = p.strategy_type === 'future_buildable' ? getFutureLeadInsight(p) : null;
   const benchmarkQuery = useMarketBenchmark(p.teryt_gmina, {
@@ -189,12 +213,29 @@ export function LeadDetail({ feature, onBack }: LeadDetailProps) {
     setNotesDraft('');
   }, [p.lead_id]);
 
+  useEffect(() => {
+    setKwCopyStatus('idle');
+  }, [p.lead_id]);
+
   const workflowActions: Array<{ status: 'reviewed' | 'shortlisted' | 'rejected' | 'invested'; label: string }> = [
     { status: 'reviewed', label: 'Reviewed' },
     { status: 'shortlisted', label: 'Shortlist' },
     { status: 'rejected', label: 'Reject' },
     { status: 'invested', label: 'Invested' },
   ];
+
+  const handleKwCopy = async () => {
+    if (!p.kw_number) {
+      return;
+    }
+
+    try {
+      await copyTextToClipboard(p.kw_number);
+      setKwCopyStatus('copied');
+    } catch {
+      setKwCopyStatus('error');
+    }
+  };
 
   return (
     <div className="flex flex-col h-full">
@@ -235,6 +276,48 @@ export function LeadDetail({ feature, onBack }: LeadDetailProps) {
               <ExternalLink size={11} aria-hidden />
               Otwórz aukcję
             </a>
+          )}
+          {p.kw_number && (
+            <div className="mt-3 rounded-xl border border-cyan-500/15 bg-cyan-500/5 px-3 py-3">
+              <p className="text-[10px] uppercase tracking-wider text-cyan-300">
+                Księga wieczysta
+              </p>
+              <p className="mt-2 font-mono text-sm text-gray-100 break-all">
+                {p.kw_number}
+              </p>
+              <div className="mt-3 flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => void handleKwCopy()}
+                  className="inline-flex items-center gap-1.5 rounded border border-gray-700 bg-gray-900 px-2.5 py-1.5 text-[11px] font-medium text-gray-200 transition-colors hover:border-gray-600 hover:bg-gray-800"
+                >
+                  <Copy size={11} aria-hidden />
+                  Kopiuj KW
+                </button>
+                {p.ekw_search_url && (
+                  <a
+                    href={p.ekw_search_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 rounded border border-cyan-500/30 bg-cyan-500/10 px-2.5 py-1.5 text-[11px] font-medium text-cyan-200 transition-colors hover:border-cyan-400/50 hover:bg-cyan-500/15"
+                  >
+                    <ExternalLink size={11} aria-hidden />
+                    Otwórz EKW (beta)
+                  </a>
+                )}
+                {kwCopyStatus === 'copied' && (
+                  <span className="text-[11px] text-emerald-300">Skopiowano numer KW.</span>
+                )}
+                {kwCopyStatus === 'error' && (
+                  <span className="text-[11px] text-amber-200">
+                    Kopiowanie nie powiodło się. Skopiuj numer ręcznie.
+                  </span>
+                )}
+              </div>
+              <p className="mt-2 text-[11px] text-gray-500">
+                Portal EKW jest zewnętrzny, a prefill działa w trybie best-effort. Jeśli formularz nie uzupełni się poprawnie, numer KW jest gotowy do wklejenia.
+              </p>
+            </div>
           )}
           <div className="mt-3">
             <ConfidenceBadge score={p.confidence_score} variant="bar" />
