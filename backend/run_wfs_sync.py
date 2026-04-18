@@ -48,6 +48,7 @@ from app.services.operations_scope import (
     normalize_province,
     province_display_name,
     province_teryt_prefix,
+    provinces,
 )
 from app.services.wfs_downloader import (
     WFSFieldMapping,
@@ -60,6 +61,7 @@ from app.services.gison_raster_ingestor import (
     probe_gison_raster_source,
     run_gison_raster_ingest,
 )
+from app.services.app_gml_ingestor import run_app_gml_ingest
 from app.services.wms_grid_ingestor import run_wms_grid_ingest
 
 logger = logging.getLogger("run_wfs_sync")
@@ -104,13 +106,125 @@ _UNCOVERED_COVERAGE_OVERRIDES: dict[str, tuple[str, str]] = {
         "gison_raster_candidate",
         "Public GISON raster assets and parcel-linked legend/uchwała links are live; continue source work with query-backed or manual-legend ingest instead of treating the gmina as source-less.",
     ),
+    "1203034": (
+        "manual_backlog",
+        "Chrzanów planning sources are already live across the municipal portal and geoportal-krajowy, including plan-ogolny and MPZP project pages, but no parcel-safe vector or raster zoning endpoint is confirmed yet and candidate e-mapa wykazplanow hosts currently return 403; continue geometry/source discovery before promoting coverage.",
+    ),
+    "1205092": (
+        "source_discovered_no_parcel_match",
+        "Sękowa public e-mapa wykazplanow now exposes many live MPZP APP/GML/GeoTIFF assets, but the active parcel in Ropica Górna still does not intersect any discovered plan geometry; keep this in source discovery/backlog rather than treating it as a missing-source gmina.",
+    ),
+    "1206022": (
+        "manual_backlog",
+        "Igołomia-Wawrzeńczyce geoportal-krajowy is live and exposes formal plan-ogolny content, but no parcel-safe vector or raster zoning endpoint is confirmed yet; continue geometry/source discovery before promoting coverage.",
+    ),
+    "1206032": (
+        "manual_backlog",
+        "Iwanowice planning sources are already live across the municipal portal and geoportal-krajowy, including plan-ogolny, studium and MPZP text publications, but no parcel-safe vector or raster zoning endpoint is confirmed yet and candidate e-mapa wykazplanow hosts currently return 403; continue geometry/source discovery before promoting coverage.",
+    ),
+    "1202024": (
+        "manual_backlog",
+        "Brzesko planning sources are already live across the municipal portal and geoportal-krajowy, including plan-ogolny / MPZP materials, but no parcel-safe vector or raster zoning endpoint is confirmed yet and candidate e-mapa wykazplanow hosts currently return 403; continue geometry/source discovery before promoting coverage.",
+    ),
     "1206105": (
-        "no_source_available",
-        "Continue MPZP source discovery; current public endpoints expose APP/metadata but not usable zoning features.",
+        "manual_backlog",
+        "Skała planning sources are already live across the municipal portal, geoportal-krajowy and public e-mapa infrastructure, including an advertised MPZP WMS service, but the currently active Cianowice parcel still returns no useful parcel-safe WMS/APP hit; continue geometry/source discovery before promoting coverage.",
+    ),
+    "1206162": (
+        "manual_backlog",
+        "Zabierzów geoportal-krajowy and municipal planning pages are live for the plan-ogolny workflow, but no parcel-safe vector or raster zoning endpoint is confirmed yet; continue geometry/source discovery before promoting coverage.",
+    ),
+    "1208045": (
+        "manual_backlog",
+        "Książ Wielki planning pages are already live and expose formal plan-ogolny materials, including e-mapa plan-ogolny content, but no parcel-safe vector or raster zoning endpoint is confirmed yet; continue geometry/source discovery before promoting coverage.",
+    ),
+    "1211092": (
+        "manual_backlog",
+        "Gmina Nowy Targ planning sources are already live across the municipal portal and geoportal-krajowy, including plan-ogolny / MPZP materials for the Knurów-Lasek area, but no parcel-safe vector or raster zoning endpoint is confirmed yet and candidate e-mapa wykazplanow hosts currently return 403; continue geometry/source discovery before promoting coverage.",
+    ),
+    "1210062": (
+        "source_discovered_no_parcel_match",
+        "Korzenna public e-mapa wykazplanow exposes many live MPZP APP/GML/GeoTIFF assets, but the active Janczowa parcel still does not intersect any discovered plan geometry; keep this in source discovery/backlog rather than treating it as a missing-source gmina.",
     ),
     "1216145": (
         "no_source_available",
         "Continue source discovery and check local SIP/BIP for municipal MPZP assets.",
+    ),
+    "1816145": (
+        "gison_raster_candidate",
+        "Tyczyn public wykazplanow exposes live WMS and GeoTIFF plan assets, and plan 038 already matches active Borek Stary parcels; continue through the gison_raster workstream and promote only after legend semantics are verified.",
+    ),
+    "1805042": (
+        "manual_backlog",
+        "Public GISON WFS for Gmina Jasło exposes binding MPZP extents and titles; ingest it conservatively as MPZP project coverage until parcel-safe zoning classes are available.",
+    ),
+    "1808042": (
+        "manual_backlog",
+        "Public APP ZIP for Giedlarowa exposes a project extent that can be ingested through app_gml; keep it as project coverage until binding zoning semantics appear.",
+    ),
+    "1804082": (
+        "manual_backlog",
+        "Geoportal-krajowy MPZP registry for Gmina Radymno is live and now yields formal binding planning signals, but the public HTML does not expose direct WMS/WFS/APP asset URLs and candidate e-mapa wykazplanow endpoints currently return 403; continue geometry/source discovery before promoting coverage.",
+    ),
+    "1805112": (
+        "manual_backlog",
+        "Formal BIP MPZP and plan-ogolny sources are live for Gmina Tarnowiec / Dobrucowa, but no parcel-safe vector or raster zoning endpoint is confirmed yet and candidate e-mapa wykazplanow endpoints currently return 403; continue geometry/source discovery before promoting coverage.",
+    ),
+    "1803042": (
+        "upstream_blocker",
+        "Dębica geoportal-krajowy is live and exposes formal MPZP content, but the public e-mapa wykazplanow feed still returns an operator error page ('Błąd połączenia em_'); treat this as an upstream blocker until the host recovers or an alternate geometry source is found.",
+    ),
+    "1803052": (
+        "upstream_blocker",
+        "Jodłowa geoportal-krajowy is live and exposes formal plan-ogolny content, but the public e-mapa wykazplanow feed still returns an operator error page ('Błąd połączenia em_'); treat this as an upstream blocker until the host recovers or an alternate geometry source is found.",
+    ),
+    "1807025": (
+        "manual_backlog",
+        "Public Dukla planning pages are live and expose formal plan-ogolny content, but the POG geometry path is currently login-gated and no safe public vector or raster zoning endpoint is confirmed yet; continue geometry/source discovery before promoting coverage.",
+    ),
+    "1809054": (
+        "manual_backlog",
+        "Narol geoportal-krajowy MPZP registry is live and exposes formal binding plan metadata, but no parcel-safe vector or raster zoning endpoint is confirmed yet; continue geometry/source discovery before promoting coverage.",
+    ),
+    "1803065": (
+        "manual_backlog",
+        "Pilzno geoportal-krajowy is live and exposes formal MPZP/plan-ogolny content for the municipality that covers Łęki Dolne, but the public HTML does not expose direct WMS/WFS/APP asset URLs and candidate e-mapa wykazplanow endpoints currently return 403; continue geometry/source discovery before promoting coverage.",
+    ),
+    "1811032": (
+        "manual_backlog",
+        "Czermin geoportal-krajowy is live for TERYT 1811032 and exposes formal planning landing/plan-ogolny content, but no parcel-safe vector or raster zoning endpoint is confirmed yet and candidate e-mapa wykazplanow endpoints currently return 403; continue geometry/source discovery before promoting coverage.",
+    ),
+    "1815012": (
+        "source_discovered_no_parcel_match",
+        "Iwierzyce public wykazplanow exposes live WMS/GeoTIFF/GML plan assets, but the current active parcels in Wiercany do not intersect any discovered plan bbox yet; keep this in source discovery/backlog rather than treating it as a missing-source gmina.",
+    ),
+    "1819032": (
+        "manual_backlog",
+        "Niebylec geoportal-krajowy is live and exposes formal plan-ogolny content for the municipality that covers Lutcza, but no parcel-safe vector or raster zoning endpoint is confirmed yet and candidate e-mapa wykazplanow endpoints currently return 403; continue geometry/source discovery before promoting coverage.",
+    ),
+    "1819045": (
+        "manual_backlog",
+        "Strzyżów geoportal-krajowy is live and exposes formal MPZP content for the municipality that covers Godowa, but no parcel-safe vector or raster zoning endpoint is confirmed yet and candidate e-mapa wykazplanow endpoints currently return 403; continue geometry/source discovery before promoting coverage.",
+    ),
+    "1820032": (
+        "manual_backlog",
+        "Grębów geoportal-krajowy is live and exposes formal MPZP content, but no parcel-safe vector or raster zoning endpoint is confirmed yet and candidate e-mapa wykazplanow endpoints currently return 403; continue geometry/source discovery before promoting coverage.",
+    ),
+    "1816065": (
+        "manual_backlog",
+        "Głogów Małopolski geoportal-krajowy is live and exposes formal MPZP content for the municipality that covers Budy Głogowskie and Hucisko, but the public e-mapa feed remains semantically unsafe and no parcel-safe vector or raster zoning endpoint is confirmed yet; continue geometry/source discovery before promoting coverage.",
+    ),
+    "1807102": (
+        "manual_backlog",
+        "The active parcel locality resolves to Szklary, while the parcel carries a non-matching TERYT; treat this as a resolver/manual backlog case and verify municipality alignment against the live Hyżne planning sources before promoting coverage.",
+    ),
+    "1816072": (
+        "gison_raster_candidate",
+        "Hyżne public wykazplanow exposes plan 001 with parcel matches for Grzegorzówka/Szklary plus live WMS and GeoTIFF assets; continue through the raster/legend workstream and promote only after a safe manual legend override is prepared.",
+    ),
+    "1816115": (
+        "source_discovered_no_parcel_match",
+        "Sokołów Małopolski public wykazplanow exposes many live WMS/GeoTIFF plan assets, but the current active parcels do not intersect any discovered plan bbox yet; keep this in source discovery/backlog rather than treating it as a missing-source gmina.",
     ),
 }
 
@@ -127,7 +241,7 @@ class WFSRegistryEntry:
     layer_name: str                     # WFS TYPENAMES / layer identifier
     source_srid: int                    # CRS of the WFS source
     field_mapping: WFSFieldMapping      # Maps WFS property names → PlanningZone columns
-    source_kind: str = "wfs"           # 'wfs' | 'wms_grid' | 'gison_raster'
+    source_kind: str = "wfs"           # 'wfs' | 'wms_grid' | 'gison_raster' | 'app_gml'
     plan_type: str = "mpzp"
     wfs_version: str = "2.0.0"         # ArcGIS often needs "1.1.0"
     prefer_json: bool = True            # Set False for ArcGIS WFS (no JSON output)
@@ -289,6 +403,31 @@ WFS_REGISTRY: dict[str, WFSRegistryEntry | list[WFSRegistryEntry]] = {
         source_srid=2180,
         wfs_version="1.1.0",
         prefer_json=False,
+        field_mapping=WFSFieldMapping(
+            przeznaczenie="etykieta",
+            przeznaczenie_opis="opis",
+            plan_name="plan",
+            uchwala_nr="",
+            plan_effective_date="",
+            teryt_gmina="",
+        ),
+    ),
+
+    # ------------------------------------------------------------------
+    # Podkarpackie — Boguchwała (gmina miejsko-wiejska, 1816035)
+    # Source: e-mapa / iGeoMap vector MPZP service exposed in the public
+    # rejestr urbanistyczny as "Przeglądania i pobierania (WMS/WFS)".
+    # WFS exposes zoning polygons as lay63 ("Przeznaczenia terenu").
+    # WFS: MapServer 1.1.0, GML only.
+    # ------------------------------------------------------------------
+    "1816035": WFSRegistryEntry(
+        label="Boguchwała",
+        wfs_url="https://vmpzp.igeomap.pl/cgi-bin/plany/181603",
+        layer_name="lay63",
+        source_srid=2180,
+        wfs_version="1.1.0",
+        prefer_json=False,
+        swap_xy=True,
         field_mapping=WFSFieldMapping(
             przeznaczenie="etykieta",
             przeznaczenie_opis="opis",
@@ -607,6 +746,630 @@ WFS_REGISTRY: dict[str, WFSRegistryEntry | list[WFSRegistryEntry]] = {
             "?profil=golcza&layers=MPZP&lng=%lon%&lat=%lat%"
         ),
         plan_name="Gołcza MPZP portal",
+        field_mapping=WFSFieldMapping(),
+    ),
+
+    # ------------------------------------------------------------------
+    # Podkarpackie — Hyżne / Grzegorzówka / Szklary (gmina wiejska, 1816072)
+    # Source: public APP view page for plan 001 plus parcel-matched WMS assets.
+    # The APP title is semantically explicit ("tereny lasów i zalesień"), so
+    # we allow a conservative metadata-backed fallback designation of ZL to
+    # unlock automatic delta coverage without inventing buildable classes.
+    # ------------------------------------------------------------------
+    "1816072": WFSRegistryEntry(
+        label="Hyżne / Grzegorzówka / Szklary",
+        wfs_url="https://mpzp.igeomap.pl/cgi-bin/plany/181607/001",
+        layer_name="plany001",
+        source_srid=2180,
+        source_kind="wms_grid",
+        wfs_version="1.1.1",
+        prefer_json=False,
+        parser_name="gison_portal_html",
+        query_url_template="https://hyzne.e-mapa.net/wykazplanow/view_gml.php?plan=001",
+        fallback_designation="ZL",
+        fallback_description=(
+            "APP boundary fallback: plan 001 title indicates forests and afforestation."
+        ),
+        plan_name="Hyżne MPZP 001",
+        field_mapping=WFSFieldMapping(),
+    ),
+
+    # ------------------------------------------------------------------
+    # Podkarpackie — Tyczyn / Borek Stary (gmina miejsko-wiejska, 1816145)
+    # Source: public APP view page for plan 038 plus parcel-matched WMS assets.
+    # All current Borek Stary parcels fall inside plan 038, whose APP title
+    # explicitly says "tereny lasów i zalesień". We therefore promote a
+    # conservative metadata-backed fallback designation of ZL so the gmina has
+    # an automatic MPZP path without inventing buildable semantics.
+    # ------------------------------------------------------------------
+    "1816145": WFSRegistryEntry(
+        label="Tyczyn / Borek Stary",
+        wfs_url="https://mpzp.igeomap.pl/cgi-bin/plany/181614/038",
+        layer_name="plany038",
+        source_srid=2180,
+        source_kind="wms_grid",
+        wfs_version="1.1.1",
+        prefer_json=False,
+        parser_name="gison_portal_html",
+        query_url_template="https://tyczyn.e-mapa.net/wykazplanow/view_gml.php?plan=038",
+        fallback_designation="ZL",
+        fallback_description=(
+            "APP boundary fallback: plan 038 title indicates forests and afforestation."
+        ),
+        plan_name="Tyczyn MPZP 038",
+        field_mapping=WFSFieldMapping(),
+    ),
+
+    # ------------------------------------------------------------------
+    # Podkarpackie — Gmina Jasło (1805042)
+    # Source: public GISON WFS advertised by jaslo.e-mapa.net/wykazplanow.
+    # The feed exposes binding MPZP act extents and titles, but not parcel-safe
+    # zoning classes. We ingest it conservatively as non-buildable MPZP project
+    # coverage under the existing planning_zones contract.
+    # ------------------------------------------------------------------
+    "1805042": WFSRegistryEntry(
+        label="Gmina Jasło APP MPZP",
+        wfs_url=(
+            "https://administracja.gison.pl/zasiegi_mpzp_wfs_nazwa/jaslogmina"
+            "?service=WFS&version=2.0.0&request=GetFeature"
+            "&typeNames=ms:app.AktPlanowaniaPrzestrzennego.MPZP&srsName=EPSG:2180"
+        ),
+        layer_name="ms:app.AktPlanowaniaPrzestrzennego.MPZP",
+        source_srid=2180,
+        source_kind="app_gml",
+        plan_type="mpzp",
+        swap_xy=False,
+        plan_name="Gmina Jasło MPZP APP",
+        fallback_designation="MPZP_PROJ",
+        fallback_description=(
+            "Public GISON WFS extent for binding MPZP acts in Gmina Jasło; "
+            "titles are available, but parcel-safe zoning symbols are not."
+        ),
+        field_mapping=WFSFieldMapping(),
+    ),
+
+    # ------------------------------------------------------------------
+    # Podkarpackie — Gmina Leżajsk / Giedlarowa (1808042)
+    # Source: public APP ZIP published in BIP. The ZIP exposes a valid
+    # AktPlanowaniaPrzestrzennego geometry, but only as a project extent
+    # ("w opracowaniu"), not as binding zoning classes. We ingest it as a
+    # conservative `mpzp` project-extent zone to move the gmina out of missing-source
+    # backlog without inventing buildable semantics.
+    # ------------------------------------------------------------------
+    "1808042": WFSRegistryEntry(
+        label="Gmina Leżajsk / Giedlarowa APP",
+        wfs_url="https://uglezajsk.bip.gov.pl/fobjects/download/1651723/gml_giedlarowa-zip.html",
+        layer_name="app_giedlarowa_6_2024",
+        source_srid=2178,
+        source_kind="app_gml",
+        plan_type="mpzp",
+        swap_xy=True,
+        plan_name="Giedlarowa APP 6.2024",
+        fallback_designation="MPZP_PROJ",
+        fallback_description="Public APP project extent for Giedlarowa; not a binding zoning designation.",
+        field_mapping=WFSFieldMapping(),
+    ),
+
+    # ------------------------------------------------------------------
+    # Podkarpackie — Gmina Radymno / Duńkowice (1804082)
+    # Source: public GISON WFS advertised by radymno.e-mapa.net/wykazplanow.
+    # The feed exposes binding MPZP act extents and titles, but not parcel-safe
+    # zoning classes. We ingest it conservatively as non-buildable MPZP project
+    # coverage under the existing planning_zones contract.
+    # ------------------------------------------------------------------
+    "1804082": WFSRegistryEntry(
+        label="Gmina Radymno APP MPZP",
+        wfs_url=(
+            "https://administracja.gison.pl/zasiegi_mpzp_wfs_nazwa/radymnogmina"
+            "?service=WFS&version=2.0.0&request=GetFeature"
+            "&typeNames=ms:app.AktPlanowaniaPrzestrzennego.MPZP&srsName=EPSG:2180"
+        ),
+        layer_name="ms:app.AktPlanowaniaPrzestrzennego.MPZP",
+        source_srid=2180,
+        source_kind="app_gml",
+        plan_type="mpzp",
+        swap_xy=False,
+        plan_name="Gmina Radymno MPZP APP",
+        fallback_designation="MPZP_PROJ",
+        fallback_description=(
+            "Public GISON WFS extent for binding MPZP acts in Gmina Radymno; "
+            "titles are available, but parcel-safe zoning symbols are not."
+        ),
+        field_mapping=WFSFieldMapping(),
+    ),
+
+    # ------------------------------------------------------------------
+    # Podkarpackie — Gmina Tarnowiec / Dobrucowa (1805112)
+    # Source: public GISON WFS advertised by tarnowiec.e-mapa.net/wykazplanow.
+    # The feed exposes binding MPZP act extents and titles, but not parcel-safe
+    # zoning classes. We ingest it conservatively as non-buildable MPZP project
+    # coverage under the existing planning_zones contract.
+    # ------------------------------------------------------------------
+    "1805112": WFSRegistryEntry(
+        label="Gmina Tarnowiec APP MPZP",
+        wfs_url=(
+            "https://administracja.gison.pl/zasiegi_mpzp_wfs_nazwa/tarnowiec"
+            "?service=WFS&version=2.0.0&request=GetFeature"
+            "&typeNames=ms:app.AktPlanowaniaPrzestrzennego.MPZP&srsName=EPSG:2180"
+        ),
+        layer_name="ms:app.AktPlanowaniaPrzestrzennego.MPZP",
+        source_srid=2180,
+        source_kind="app_gml",
+        plan_type="mpzp",
+        swap_xy=False,
+        plan_name="Gmina Tarnowiec MPZP APP",
+        fallback_designation="MPZP_PROJ",
+        fallback_description=(
+            "Public GISON WFS extent for binding MPZP acts in Gmina Tarnowiec; "
+            "titles are available, but parcel-safe zoning symbols are not."
+        ),
+        field_mapping=WFSFieldMapping(),
+    ),
+
+    # ------------------------------------------------------------------
+    # Podkarpackie — Narol (1809054)
+    # Source: public GISON WFS advertised by the municipal planning portal.
+    # The feed exposes binding MPZP act extents and titles, but not parcel-safe
+    # zoning classes. We ingest it conservatively as non-buildable MPZP project
+    # coverage under the existing planning_zones contract.
+    # ------------------------------------------------------------------
+    "1809054": WFSRegistryEntry(
+        label="Narol APP MPZP",
+        wfs_url=(
+            "https://administracja.gison.pl/zasiegi_mpzp_wfs_nazwa/narol"
+            "?service=WFS&version=2.0.0&request=GetFeature"
+            "&typeNames=ms:app.AktPlanowaniaPrzestrzennego.MPZP&srsName=EPSG:2180"
+        ),
+        layer_name="ms:app.AktPlanowaniaPrzestrzennego.MPZP",
+        source_srid=2180,
+        source_kind="app_gml",
+        plan_type="mpzp",
+        swap_xy=False,
+        plan_name="Narol MPZP APP",
+        fallback_designation="MPZP_PROJ",
+        fallback_description=(
+            "Public GISON WFS extent for binding MPZP acts in Narol; "
+            "titles are available, but parcel-safe zoning symbols are not."
+        ),
+        field_mapping=WFSFieldMapping(),
+    ),
+
+    # ------------------------------------------------------------------
+    # Podkarpackie — Jaśliska / Szklary (1807102)
+    # Source: public iGeoMap WFS for the Jaśliska municipality. The active
+    # parcel carries TERYT 1807102, while the public service is exposed on the
+    # shared 6-digit municipal path. The `ms:zasiegi` layer contains real
+    # planning extents with plan titles and uchwały, which is sufficient for
+    # coverage-level planning_zones ingestion.
+    # ------------------------------------------------------------------
+    "1807102": WFSRegistryEntry(
+        label="Jaśliska",
+        wfs_url="https://mpzp.igeomap.pl/cgi-bin/180710",
+        layer_name="ms:zasiegi",
+        source_srid=2180,
+        wfs_version="2.0.0",
+        prefer_json=False,
+        field_mapping=WFSFieldMapping(
+            przeznaczenie="numer",
+            przeznaczenie_opis="nazwa",
+            plan_name="nazwa",
+            uchwala_nr="uchwala",
+            plan_effective_date="data",
+            teryt_gmina="",
+        ),
+    ),
+
+    # ------------------------------------------------------------------
+    # Podkarpackie — Niebylec / Lutcza (1819032)
+    # Source: public GISON WFS advertised through the planning portal. The feed
+    # exposes binding MPZP act extents and titles even though the HTML registry
+    # page itself says "Brak planów w systemie e-mapa". We ingest it
+    # conservatively as non-buildable MPZP project coverage.
+    # ------------------------------------------------------------------
+    "1819032": WFSRegistryEntry(
+        label="Niebylec APP MPZP",
+        wfs_url=(
+            "https://administracja.gison.pl/zasiegi_mpzp_wfs_nazwa/niebylec"
+            "?service=WFS&version=2.0.0&request=GetFeature"
+            "&typeNames=ms:app.AktPlanowaniaPrzestrzennego.MPZP&srsName=EPSG:2180"
+        ),
+        layer_name="ms:app.AktPlanowaniaPrzestrzennego.MPZP",
+        source_srid=2180,
+        source_kind="app_gml",
+        plan_type="mpzp",
+        swap_xy=False,
+        plan_name="Niebylec MPZP APP",
+        fallback_designation="MPZP_PROJ",
+        fallback_description=(
+            "Public GISON WFS extent for binding MPZP acts in Niebylec; "
+            "titles are available, but parcel-safe zoning symbols are not."
+        ),
+        field_mapping=WFSFieldMapping(),
+    ),
+
+    # ------------------------------------------------------------------
+    # Podkarpackie — Strzyżów / Godowa (1819045)
+    # Source: public GISON WFS advertised through the municipal planning
+    # portal. The feed exposes binding MPZP act extents and titles, but not
+    # parcel-safe zoning classes. We ingest it conservatively as non-buildable
+    # MPZP project coverage.
+    # ------------------------------------------------------------------
+    "1819045": WFSRegistryEntry(
+        label="Strzyżów APP MPZP",
+        wfs_url=(
+            "https://administracja.gison.pl/zasiegi_mpzp_wfs_nazwa/strzyzow"
+            "?service=WFS&version=2.0.0&request=GetFeature"
+            "&typeNames=ms:app.AktPlanowaniaPrzestrzennego.MPZP&srsName=EPSG:2180"
+        ),
+        layer_name="ms:app.AktPlanowaniaPrzestrzennego.MPZP",
+        source_srid=2180,
+        source_kind="app_gml",
+        plan_type="mpzp",
+        swap_xy=False,
+        plan_name="Strzyżów MPZP APP",
+        fallback_designation="MPZP_PROJ",
+        fallback_description=(
+            "Public GISON WFS extent for binding MPZP acts in Strzyżów; "
+            "titles are available, but parcel-safe zoning symbols are not."
+        ),
+        field_mapping=WFSFieldMapping(),
+    ),
+
+    # ------------------------------------------------------------------
+    # Podkarpackie — Grębów (1820032)
+    # Source: public GISON WFS advertised through the municipal planning
+    # portal. The feed exposes binding MPZP act extents and titles, but not
+    # parcel-safe zoning classes. We ingest it conservatively as non-buildable
+    # MPZP project coverage.
+    # ------------------------------------------------------------------
+    "1820032": WFSRegistryEntry(
+        label="Grębów APP MPZP",
+        wfs_url=(
+            "https://administracja.gison.pl/zasiegi_mpzp_wfs_nazwa/grebow"
+            "?service=WFS&version=2.0.0&request=GetFeature"
+            "&typeNames=ms:app.AktPlanowaniaPrzestrzennego.MPZP&srsName=EPSG:2180"
+        ),
+        layer_name="ms:app.AktPlanowaniaPrzestrzennego.MPZP",
+        source_srid=2180,
+        source_kind="app_gml",
+        plan_type="mpzp",
+        swap_xy=False,
+        plan_name="Grębów MPZP APP",
+        fallback_designation="MPZP_PROJ",
+        fallback_description=(
+            "Public GISON WFS extent for binding MPZP acts in Grębów; "
+            "titles are available, but parcel-safe zoning symbols are not."
+        ),
+        field_mapping=WFSFieldMapping(),
+    ),
+
+    # ------------------------------------------------------------------
+    # Podkarpackie — Iwierzyce / Wiercany (1815012)
+    # Source: public e-mapa APP endpoint for plan 002, whose title explicitly
+    # names Wiercany/Iwierzyce/Nockowa. Active parcels do not intersect the
+    # discovered bbox yet, but the public APP geometry is stable enough to
+    # ingest as conservative MPZP project coverage for province-level coverage.
+    # ------------------------------------------------------------------
+    "1815012": WFSRegistryEntry(
+        label="Iwierzyce / Wiercany APP",
+        wfs_url="https://iwierzyce.e-mapa.net/wykazplanow/gml.php?plan=002",
+        layer_name="app_iwierzyce_002",
+        source_srid=2178,
+        source_kind="app_gml",
+        plan_type="mpzp",
+        swap_xy=True,
+        plan_name="Iwierzyce MPZP 002 APP",
+        fallback_designation="MPZP_PROJ",
+        fallback_description=(
+            "Public APP extent for plan 002 covering the Iwierzyce/Wiercany/Nockowa area; "
+            "titles are available, but parcel-safe zoning symbols are not."
+        ),
+        field_mapping=WFSFieldMapping(),
+    ),
+
+    # ------------------------------------------------------------------
+    # Podkarpackie — Sokołów Małopolski / Wólka Niedźwiedzka (1816115)
+    # Source: public e-mapa APP endpoint for plan 014, whose title explicitly
+    # names Wólka Niedźwiedzka. We ingest it conservatively as MPZP project
+    # coverage instead of inventing binding zoning classes.
+    # ------------------------------------------------------------------
+    "1816115": WFSRegistryEntry(
+        label="Sokołów Małopolski / Wólka Niedźwiedzka APP",
+        wfs_url="https://sokolowmalopolski.e-mapa.net/wykazplanow/gml.php?plan=014",
+        layer_name="app_sokolow_014",
+        source_srid=2178,
+        source_kind="app_gml",
+        plan_type="mpzp",
+        swap_xy=True,
+        plan_name="Sokołów Małopolski MPZP 014 APP",
+        fallback_designation="MPZP_PROJ",
+        fallback_description=(
+            "Public APP extent for plan 014 covering Wólka Niedźwiedzka; "
+            "titles are available, but parcel-safe zoning symbols are not."
+        ),
+        field_mapping=WFSFieldMapping(),
+    ),
+
+    # ------------------------------------------------------------------
+    # Małopolskie — Igołomia-Wawrzeńczyce (1206022)
+    # Source: public GISON WFS advertised through the municipal planning
+    # stack. The feed exposes binding MPZP act extents and titles, but not
+    # parcel-safe zoning classes. We ingest it conservatively as MPZP project
+    # coverage to move the gmina into geometry-backed coverage.
+    # ------------------------------------------------------------------
+    "1206022": WFSRegistryEntry(
+        label="Igołomia-Wawrzeńczyce APP MPZP",
+        wfs_url=(
+            "https://administracja.gison.pl/zasiegi_mpzp_wfs_nazwa/igolomiawawrzenczyce"
+            "?service=WFS&version=2.0.0&request=GetFeature"
+            "&typeNames=ms:app.AktPlanowaniaPrzestrzennego.MPZP&srsName=EPSG:2180"
+        ),
+        layer_name="ms:app.AktPlanowaniaPrzestrzennego.MPZP",
+        source_srid=2180,
+        source_kind="app_gml",
+        plan_type="mpzp",
+        swap_xy=False,
+        plan_name="Igołomia-Wawrzeńczyce MPZP APP",
+        fallback_designation="MPZP_PROJ",
+        fallback_description=(
+            "Public GISON WFS extent for binding MPZP acts in Igołomia-Wawrzeńczyce; "
+            "titles are available, but parcel-safe zoning symbols are not."
+        ),
+        field_mapping=WFSFieldMapping(),
+    ),
+
+    # ------------------------------------------------------------------
+    # Małopolskie — Iwanowice (1206032)
+    # Source: public GISON WFS advertised through the municipal planning
+    # stack. The feed exposes binding MPZP act extents and titles, but not
+    # parcel-safe zoning classes. We ingest it conservatively as MPZP project
+    # coverage to move the gmina into geometry-backed coverage.
+    # ------------------------------------------------------------------
+    "1206032": WFSRegistryEntry(
+        label="Iwanowice APP MPZP",
+        wfs_url=(
+            "https://administracja.gison.pl/zasiegi_mpzp_wfs_nazwa/iwanowice"
+            "?service=WFS&version=2.0.0&request=GetFeature"
+            "&typeNames=ms:app.AktPlanowaniaPrzestrzennego.MPZP&srsName=EPSG:2180"
+        ),
+        layer_name="ms:app.AktPlanowaniaPrzestrzennego.MPZP",
+        source_srid=2180,
+        source_kind="app_gml",
+        plan_type="mpzp",
+        swap_xy=False,
+        plan_name="Iwanowice MPZP APP",
+        fallback_designation="MPZP_PROJ",
+        fallback_description=(
+            "Public GISON WFS extent for binding MPZP acts in Iwanowice; "
+            "titles are available, but parcel-safe zoning symbols are not."
+        ),
+        field_mapping=WFSFieldMapping(),
+    ),
+
+    # ------------------------------------------------------------------
+    # Małopolskie — Zabierzów (1206162)
+    # Source: public GISON WFS advertised through the municipal planning
+    # stack. The feed exposes binding MPZP act extents and titles, but not
+    # parcel-safe zoning classes. We ingest it conservatively as MPZP project
+    # coverage to move the gmina into geometry-backed coverage.
+    # ------------------------------------------------------------------
+    "1206162": WFSRegistryEntry(
+        label="Zabierzów APP MPZP",
+        wfs_url=(
+            "https://administracja.gison.pl/zasiegi_mpzp_wfs_nazwa/zabierzow"
+            "?service=WFS&version=2.0.0&request=GetFeature"
+            "&typeNames=ms:app.AktPlanowaniaPrzestrzennego.MPZP&srsName=EPSG:2180"
+        ),
+        layer_name="ms:app.AktPlanowaniaPrzestrzennego.MPZP",
+        source_srid=2180,
+        source_kind="app_gml",
+        plan_type="mpzp",
+        swap_xy=False,
+        plan_name="Zabierzów MPZP APP",
+        fallback_designation="MPZP_PROJ",
+        fallback_description=(
+            "Public GISON WFS extent for binding MPZP acts in Zabierzów; "
+            "titles are available, but parcel-safe zoning symbols are not."
+        ),
+        field_mapping=WFSFieldMapping(),
+    ),
+
+    # ------------------------------------------------------------------
+    # Małopolskie — Książ Wielki (1208045)
+    # Source: public GISON WFS advertised through the municipal planning
+    # stack. The feed exposes binding MPZP act extents and titles, but not
+    # parcel-safe zoning classes. We ingest it conservatively as MPZP project
+    # coverage to move the gmina into geometry-backed coverage.
+    # ------------------------------------------------------------------
+    "1208045": WFSRegistryEntry(
+        label="Książ Wielki APP MPZP",
+        wfs_url=(
+            "https://administracja.gison.pl/zasiegi_mpzp_wfs_nazwa/ksiazwielki"
+            "?service=WFS&version=2.0.0&request=GetFeature"
+            "&typeNames=ms:app.AktPlanowaniaPrzestrzennego.MPZP&srsName=EPSG:2180"
+        ),
+        layer_name="ms:app.AktPlanowaniaPrzestrzennego.MPZP",
+        source_srid=2180,
+        source_kind="app_gml",
+        plan_type="mpzp",
+        swap_xy=False,
+        plan_name="Książ Wielki MPZP APP",
+        fallback_designation="MPZP_PROJ",
+        fallback_description=(
+            "Public GISON WFS extent for binding MPZP acts in Książ Wielki; "
+            "titles are available, but parcel-safe zoning symbols are not."
+        ),
+        field_mapping=WFSFieldMapping(),
+    ),
+
+    # ------------------------------------------------------------------
+    # Małopolskie — Łużna / Szalowa (1205062)
+    # ------------------------------------------------------------------
+    "1205062": WFSRegistryEntry(
+        label="Łużna APP MPZP",
+        wfs_url=(
+            "https://administracja.gison.pl/zasiegi_mpzp_wfs_nazwa/luzna"
+            "?service=WFS&version=2.0.0&request=GetFeature"
+            "&typeNames=ms:app.AktPlanowaniaPrzestrzennego.MPZP&srsName=EPSG:2180"
+        ),
+        layer_name="ms:app.AktPlanowaniaPrzestrzennego.MPZP",
+        source_srid=2180,
+        source_kind="app_gml",
+        plan_type="mpzp",
+        swap_xy=False,
+        plan_name="Łużna MPZP APP",
+        fallback_designation="MPZP_PROJ",
+        fallback_description=(
+            "Public GISON WFS extent for binding MPZP acts in Łużna; "
+            "titles are available, but parcel-safe zoning symbols are not."
+        ),
+        field_mapping=WFSFieldMapping(),
+    ),
+
+    # ------------------------------------------------------------------
+    # Małopolskie — Skawina / Jaśkowice (1206115)
+    # ------------------------------------------------------------------
+    "1206115": WFSRegistryEntry(
+        label="Skawina APP MPZP",
+        wfs_url=(
+            "https://administracja.gison.pl/zasiegi_mpzp_wfs_nazwa/skawina"
+            "?service=WFS&version=2.0.0&request=GetFeature"
+            "&typeNames=ms:app.AktPlanowaniaPrzestrzennego.MPZP&srsName=EPSG:2180"
+        ),
+        layer_name="ms:app.AktPlanowaniaPrzestrzennego.MPZP",
+        source_srid=2180,
+        source_kind="app_gml",
+        plan_type="mpzp",
+        swap_xy=False,
+        plan_name="Skawina MPZP APP",
+        fallback_designation="MPZP_PROJ",
+        fallback_description=(
+            "Public GISON WFS extent for binding MPZP acts in Skawina; "
+            "titles are available, but parcel-safe zoning symbols are not."
+        ),
+        field_mapping=WFSFieldMapping(),
+    ),
+
+    # ------------------------------------------------------------------
+    # Małopolskie — Podegrodzie / Juraszowa (1210142)
+    # ------------------------------------------------------------------
+    "1210142": WFSRegistryEntry(
+        label="Podegrodzie APP MPZP",
+        wfs_url=(
+            "https://administracja.gison.pl/zasiegi_mpzp_wfs_nazwa/podegrodzie"
+            "?service=WFS&version=2.0.0&request=GetFeature"
+            "&typeNames=ms:app.AktPlanowaniaPrzestrzennego.MPZP&srsName=EPSG:2180"
+        ),
+        layer_name="ms:app.AktPlanowaniaPrzestrzennego.MPZP",
+        source_srid=2180,
+        source_kind="app_gml",
+        plan_type="mpzp",
+        swap_xy=False,
+        plan_name="Podegrodzie MPZP APP",
+        fallback_designation="MPZP_PROJ",
+        fallback_description=(
+            "Public GISON WFS extent for binding MPZP acts in Podegrodzie; "
+            "titles are available, but parcel-safe zoning symbols are not."
+        ),
+        field_mapping=WFSFieldMapping(),
+    ),
+
+    # ------------------------------------------------------------------
+    # Małopolskie — Klucze / Chechło (1212042)
+    # ------------------------------------------------------------------
+    "1212042": WFSRegistryEntry(
+        label="Klucze APP MPZP",
+        wfs_url=(
+            "https://administracja.gison.pl/zasiegi_mpzp_wfs_nazwa/klucze"
+            "?service=WFS&version=2.0.0&request=GetFeature"
+            "&typeNames=ms:app.AktPlanowaniaPrzestrzennego.MPZP&srsName=EPSG:2180"
+        ),
+        layer_name="ms:app.AktPlanowaniaPrzestrzennego.MPZP",
+        source_srid=2180,
+        source_kind="app_gml",
+        plan_type="mpzp",
+        swap_xy=False,
+        plan_name="Klucze MPZP APP",
+        fallback_designation="MPZP_PROJ",
+        fallback_description=(
+            "Public GISON WFS extent for binding MPZP acts in Klucze; "
+            "titles are available, but parcel-safe zoning symbols are not."
+        ),
+        field_mapping=WFSFieldMapping(),
+    ),
+
+    # ------------------------------------------------------------------
+    # Małopolskie — Gmina Tarnów / Jodłówka-Wałki (1216092)
+    # ------------------------------------------------------------------
+    "1216092": WFSRegistryEntry(
+        label="Gmina Tarnów APP MPZP",
+        wfs_url=(
+            "https://administracja.gison.pl/zasiegi_mpzp_wfs_nazwa/tarnowgmina"
+            "?service=WFS&version=2.0.0&request=GetFeature"
+            "&typeNames=ms:app.AktPlanowaniaPrzestrzennego.MPZP&srsName=EPSG:2180"
+        ),
+        layer_name="ms:app.AktPlanowaniaPrzestrzennego.MPZP",
+        source_srid=2180,
+        source_kind="app_gml",
+        plan_type="mpzp",
+        swap_xy=False,
+        plan_name="Gmina Tarnów MPZP APP",
+        fallback_designation="MPZP_PROJ",
+        fallback_description=(
+            "Public GISON WFS extent for binding MPZP acts in Gmina Tarnów; "
+            "titles are available, but parcel-safe zoning symbols are not."
+        ),
+        field_mapping=WFSFieldMapping(),
+    ),
+
+    # ------------------------------------------------------------------
+    # Małopolskie — Zakliczyn / Paleśnica (1216145)
+    # ------------------------------------------------------------------
+    "1216145": WFSRegistryEntry(
+        label="Zakliczyn APP MPZP",
+        wfs_url=(
+            "https://administracja.gison.pl/zasiegi_mpzp_wfs_nazwa/zakliczyn"
+            "?service=WFS&version=2.0.0&request=GetFeature"
+            "&typeNames=ms:app.AktPlanowaniaPrzestrzennego.MPZP&srsName=EPSG:2180"
+        ),
+        layer_name="ms:app.AktPlanowaniaPrzestrzennego.MPZP",
+        source_srid=2180,
+        source_kind="app_gml",
+        plan_type="mpzp",
+        swap_xy=False,
+        plan_name="Zakliczyn MPZP APP",
+        fallback_designation="MPZP_PROJ",
+        fallback_description=(
+            "Public GISON WFS extent for binding MPZP acts in Zakliczyn; "
+            "titles are available, but parcel-safe zoning symbols are not."
+        ),
+        field_mapping=WFSFieldMapping(),
+    ),
+
+    # ------------------------------------------------------------------
+    # Małopolskie — Korzenna / Janczowa (1210062)
+    # Source: public GISON WFS exposes the MPZP drawing layer, which carries
+    # geometry-backed plan extents even though the act extent path used in
+    # earlier probes did not overlap the active parcel sample.
+    # ------------------------------------------------------------------
+    "1210062": WFSRegistryEntry(
+        label="Korzenna APP rysunki MPZP",
+        wfs_url=(
+            "https://administracja.gison.pl/zasiegi_mpzp_wfs_nazwa/korzenna"
+            "?service=WFS&version=2.0.0&request=GetFeature"
+            "&typeNames=ms:app.RysunkiAktuPlanowania.MPZP&srsName=EPSG:2180"
+        ),
+        layer_name="ms:app.RysunkiAktuPlanowania.MPZP",
+        source_srid=2180,
+        source_kind="app_gml",
+        plan_type="mpzp",
+        swap_xy=False,
+        plan_name="Korzenna MPZP APP",
+        fallback_designation="MPZP_PROJ",
+        fallback_description=(
+            "Public GISON WFS drawing extent for binding MPZP acts in Korzenna; "
+            "titles are available, but parcel-safe zoning symbols are not."
+        ),
         field_mapping=WFSFieldMapping(),
     ),
 
@@ -1122,6 +1885,81 @@ WFS_REGISTRY: dict[str, WFSRegistryEntry | list[WFSRegistryEntry]] = {
             ),
         ),
     ],
+
+    # ------------------------------------------------------------------
+    # Podkarpackie — Gmina Łańcut / Handzlówka (1810042)
+    # Source: iGeoMap vector MPZP service
+    # WFS exposes zoning polygons as lay63 ("Przeznaczenia terenu")
+    # and public APP artifacts live under lancut.e-mapa.net.
+    # ------------------------------------------------------------------
+    "1810042": WFSRegistryEntry(
+        label="Gmina Łańcut / Handzlówka",
+        wfs_url="https://vmpzp.igeomap.pl/cgi-bin/plany/181004",
+        layer_name="lay63",
+        source_srid=2180,
+        wfs_version="1.1.0",
+        prefer_json=False,
+        swap_xy=True,
+        field_mapping=WFSFieldMapping(
+            przeznaczenie="etykieta",
+            przeznaczenie_opis="opis",
+            plan_name="plan",
+            uchwala_nr="",
+            plan_effective_date="",
+            teryt_gmina="",
+        ),
+    ),
+
+    # ------------------------------------------------------------------
+    # Podkarpackie — Lesko / Huzele (1821035)
+    # Source: iGeoMap vector MPZP service
+    # WFS exposes zoning polygons as lay63 ("Przeznaczenia terenu")
+    # and public APP artifacts live under lesko.e-mapa.net.
+    # ------------------------------------------------------------------
+    "1821035": WFSRegistryEntry(
+        label="Lesko / Huzele",
+        wfs_url="https://vmpzp.igeomap.pl/cgi-bin/plany/182103",
+        layer_name="lay63",
+        source_srid=2180,
+        wfs_version="1.1.0",
+        prefer_json=False,
+        swap_xy=True,
+        field_mapping=WFSFieldMapping(
+            przeznaczenie="etykieta",
+            przeznaczenie_opis="opis",
+            plan_name="plan",
+            uchwala_nr="",
+            plan_effective_date="",
+            teryt_gmina="",
+        ),
+    ),
+
+    # ------------------------------------------------------------------
+    # Podkarpackie — Łańcut city (powiat grodzki, 1810011)
+    # Source: JOCGIS public WFS exposed by the city planning portal.
+    # Layer pl_przeznaczenia_terenu contains true zoning polygons with:
+    #   kod   -> short zoning symbol (e.g. MN2)
+    #   nazwa -> human-readable designation
+    #   tytul -> plan title
+    # WFS: GeoServer 1.1.0; keep GML as the conservative default.
+    # ------------------------------------------------------------------
+    "1810011": WFSRegistryEntry(
+        label="Łańcut",
+        wfs_url="http://ows.jocgis.pl/serwer/lancut_planowanie/wfs",
+        layer_name="lancut_planowanie:pl_przeznaczenia_terenu",
+        source_srid=2180,
+        wfs_version="1.1.0",
+        prefer_json=False,
+        swap_xy=True,
+        field_mapping=WFSFieldMapping(
+            przeznaczenie="kod",
+            przeznaczenie_opis="nazwa",
+            plan_name="tytul",
+            uchwala_nr="",
+            plan_effective_date="",
+            teryt_gmina="",
+        ),
+    ),
 
     # ------------------------------------------------------------------
     # Śląskie — Ruda Śląska (powiat grodzki, 2472011)
@@ -1731,6 +2569,19 @@ async def run_wfs_sync(
                         geotiff_url=entry.geotiff_url,
                         sample_bbox_2180=entry.sample_bbox_2180,
                     )
+                elif entry.source_kind == "app_gml":
+                    ingest = await run_app_gml_ingest(
+                        source_url=entry.wfs_url,
+                        teryt_gmina=teryt,
+                        source_srid=entry.source_srid,
+                        plan_type=entry.plan_type,
+                        swap_xy=entry.swap_xy,
+                        fixed_designation=entry.fallback_designation or "MPZP_PROJ",
+                        description_prefix=(
+                            entry.fallback_description
+                            or "APP project extent"
+                        ),
+                    )
                 else:
                     ingest = await run_wfs_ingest(
                         wfs_url=entry.wfs_url,
@@ -1810,7 +2661,7 @@ Examples:
     p.add_argument("--source-srid", type=int, default=2180, help="Override source SRID")
     p.add_argument(
         "--province",
-        choices=["slaskie", "malopolskie"],
+        choices=provinces(),
         default=None,
         help="Limit sync/listing commands to one province",
     )

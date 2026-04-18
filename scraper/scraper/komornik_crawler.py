@@ -90,13 +90,14 @@ _CATEGORIES: dict[str, str] = {
 # URL-encoded by httpx at request time.
 _PROVINCE_IDS: dict[str, str] = {
     "małopolskie": "małopolskie",
+    "podkarpackie": "podkarpackie",
     "śląskie":     "śląskie",
 }
 
 # Province detection: match in extracted text (post-filter fallback)
 # Handles both accented and ASCII forms, all grammatical cases
 _RE_PROVINCE_TARGET = re.compile(
-    r"\b(?:ma[łl]opolsk\w*|[śs][lł][aą]sk\w*)\b",
+    r"\b(?:ma[łl]opolsk\w*|podkarpack\w*|[śs][lł][aą]sk\w*)\b",
     re.IGNORECASE,
 )
 
@@ -882,7 +883,7 @@ def _log_empty_diagnostics(
     body_snippet = soup.get_text()[:300].strip().replace("\n", " ")
 
     logger.warning(
-        "[Crawler] SEVERITY:LOW — 0 listings: cat=%d prov=%s page=%d "
+        "[Crawler] SEVERITY:LOW — 0 listings: cat=%s prov=%s page=%d "
         "page_title=%r has_new_links=%s has_old_links=%s has_table=%s",
         category_id, province_name, page, title_text,
         has_new_links, has_old_links, has_table,

@@ -12,13 +12,14 @@ from datetime import datetime, timezone
 from pathlib import Path
 from uuid import UUID
 
-from sqlalchemy import func, select
+from sqlalchemy import case, func, select
 
 from app.core.database import AsyncSessionLocal
 from app.models.bronze import RawListing
-from app.models.gold import DeltaResult, InvestmentLead, PlanningZone
+from app.models.gold import DeltaResult, FutureBuildabilityAssessment, InvestmentLead, PlanningSignal, PlanningZone
 from app.models.silver import DlqParcel, Dzialka, ListingParcel
 from app.services.delta_engine import DeltaReport, run_delta_engine
+from app.services.future_buildability_engine import FutureBuildabilityReport, run_future_buildability_engine
 from app.services.geo_resolver import ResolutionReport, run_geo_resolver
 from app.services.manual_backlog_store import list_manual_backlog
 from app.services.operations_scope import (
@@ -29,12 +30,14 @@ from app.services.operations_scope import (
     compute_investment_score,
     coverage_alias_teryt,
     normalize_province,
+    provinces,
     province_db_label,
     province_display_name,
     sql_coverage_alias,
     sql_listing_province_filter,
     sql_teryt_prefix_filter,
 )
+from app.services.planning_signal_utils import HARD_NEGATIVE_DESIGNATIONS, POSITIVE_DESIGNATIONS
 from print_future_buildability_status import build_future_buildability_status_payload
 from force_retry import ResetReport, clear_gold_for_dzialki, reset_queues, sweep_stale_dlq_rows
 from run_wfs_sync import UncoveredGmina, WFSSyncReport, _fetch_uncovered_gminy, run_wfs_sync
@@ -47,6 +50,45 @@ _BACKLOG_STATUS_ORDER = {
     "covered_but_no_delta": 2,
     "covered_but_no_buildable_delta": 3,
 }
+_NO_SOURCE_COVERAGE_CATEGORIES = {
+    "no_source_available",
+    "gison_raster_candidate",
+    "source_discovered_no_parcel_match",
+}
+_UPSTREAM_BLOCKER_COVERAGE_CATEGORIES = {
+    "manual_backlog",
+}
+
+
+def _classify_uncovered_why_no_lead(*, backlog_status: str, coverage_category: str | None) -> str:
+    if backlog_status == "source_configured_but_not_loaded":
+        return "upstream_blocker"
+    if (coverage_category or "") in _UPSTREAM_BLOCKER_COVERAGE_CATEGORIES:
+        return "upstream_blocker"
+    if (coverage_category or "") in _NO_SOURCE_COVERAGE_CATEGORIES:
+        return "no_source"
+    return "no_source"
+
+
+def _classify_covered_why_no_lead(
+    *,
+    signal_rows: int,
+    positive_signal_rows: int,
+    unknown_signal_rows: int,
+    hard_negative_signal_rows: int,
+    delta_rows: int,
+    max_overall_score: float | None,
+) -> str:
+    has_any_signal = signal_rows > 0
+    has_positive_signal = positive_signal_rows > 0
+    has_unknown_only = has_any_signal and unknown_signal_rows == signal_rows and not has_positive_signal and hard_negative_signal_rows == 0
+    if has_unknown_only:
+        return "unknown_only"
+    if hard_negative_signal_rows > 0:
+        return "green_or_hard_negative"
+    if delta_rows <= 0 or (max_overall_score or 0.0) < 60.0:
+        return "weak_signal_or_no_delta"
+    return "weak_signal_or_no_delta"
 
 
 @dataclass
@@ -91,13 +133,14 @@ class ProvinceCampaignResult:
     reset_report: dict[str, object] | None = None
     geo_report: dict[str, object] | None = None
     delta_report: dict[str, object] | None = None
+    future_report: dict[str, object] | None = None
     future_status_reports: dict[str, dict[str, object]] = field(default_factory=dict)
     autofix_actions: list[str] = field(default_factory=list)
 
 
-def _parse_args() -> argparse.Namespace:
+def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Run TerraZoning province campaign")
-    parser.add_argument("--province", required=True, choices=["slaskie", "malopolskie"])
+    parser.add_argument("--province", required=True, choices=provinces())
     parser.add_argument(
         "--stage",
         default="full",
@@ -106,7 +149,7 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--autofix", action="store_true", help="Enable conservative self-heal actions")
     parser.add_argument("--parallel", action="store_true", help="Gather independent report queries concurrently")
     parser.add_argument("--json", action="store_true", help="Emit machine-readable JSON")
-    return parser.parse_args()
+    return parser.parse_args(argv)
 
 
 async def _status_snapshot(province: str, *, parallel: bool) -> ProvinceStatusSnapshot:
@@ -455,6 +498,73 @@ async def _delta_gap_snapshot(province: str) -> DeltaGapSnapshot:
             )
         ).all()
 
+        covered_codes = [str(row[0]) for row in covered_no_leads_rows]
+        signal_summary_by_teryt: dict[str, dict[str, object]] = {}
+        if covered_codes:
+            signal_rows = (
+                await db.execute(
+                    select(
+                        PlanningSignal.teryt_gmina,
+                        func.count(PlanningSignal.id).label("signal_rows"),
+                        func.sum(
+                            case(
+                                (PlanningSignal.designation_normalized.in_(tuple(POSITIVE_DESIGNATIONS)), 1),
+                                else_=0,
+                            )
+                        ).label("positive_signal_rows"),
+                        func.sum(
+                            case(
+                                (func.coalesce(PlanningSignal.designation_normalized, "unknown") == "unknown", 1),
+                                else_=0,
+                            )
+                        ).label("unknown_signal_rows"),
+                        func.sum(
+                            case(
+                                (PlanningSignal.designation_normalized.in_(tuple(HARD_NEGATIVE_DESIGNATIONS)), 1),
+                                else_=0,
+                            )
+                        ).label("hard_negative_signal_rows"),
+                    )
+                    .where(PlanningSignal.teryt_gmina.in_(covered_codes))
+                    .group_by(PlanningSignal.teryt_gmina)
+                )
+            ).mappings().all()
+            assessment_rows = (
+                await db.execute(
+                    select(
+                        Dzialka.teryt_gmina,
+                        func.max(FutureBuildabilityAssessment.overall_score).label("max_overall_score"),
+                    )
+                    .join(FutureBuildabilityAssessment, FutureBuildabilityAssessment.dzialka_id == Dzialka.id)
+                    .where(Dzialka.teryt_gmina.in_(covered_codes))
+                    .group_by(Dzialka.teryt_gmina)
+                )
+            ).mappings().all()
+            signal_summary_by_teryt = {
+                str(row["teryt_gmina"]): {
+                    "signal_rows": int(row["signal_rows"] or 0),
+                    "positive_signal_rows": int(row["positive_signal_rows"] or 0),
+                    "unknown_signal_rows": int(row["unknown_signal_rows"] or 0),
+                    "hard_negative_signal_rows": int(row["hard_negative_signal_rows"] or 0),
+                    "max_overall_score": None,
+                }
+                for row in signal_rows
+            }
+            for row in assessment_rows:
+                key = str(row["teryt_gmina"])
+                summary = signal_summary_by_teryt.setdefault(
+                    key,
+                    {
+                        "signal_rows": 0,
+                        "positive_signal_rows": 0,
+                        "unknown_signal_rows": 0,
+                        "hard_negative_signal_rows": 0,
+                        "max_overall_score": None,
+                    },
+                )
+                score = row["max_overall_score"]
+                summary["max_overall_score"] = float(score) if score is not None else None
+
     covered_no_leads: list[dict[str, object]] = []
     intersections_no_leads: list[dict[str, object]] = []
     covered_via_alias: list[dict[str, object]] = []
@@ -462,6 +572,16 @@ async def _delta_gap_snapshot(province: str) -> DeltaGapSnapshot:
 
     for code, covered_via, dzialki, planning_zones, delta_rows, localities in covered_no_leads_rows:
         delta_rows_int = int(delta_rows or 0)
+        signal_summary = signal_summary_by_teryt.get(
+            str(code),
+            {
+                "signal_rows": 0,
+                "positive_signal_rows": 0,
+                "unknown_signal_rows": 0,
+                "hard_negative_signal_rows": 0,
+                "max_overall_score": None,
+            },
+        )
         status, operator_hint = classify_backlog_status(
             in_registry=True,
             has_planning_zones=True,
@@ -476,6 +596,15 @@ async def _delta_gap_snapshot(province: str) -> DeltaGapSnapshot:
             "localities": localities or "",
             "backlog_status": status,
             "operator_hint": operator_hint,
+            "why_no_lead": _classify_covered_why_no_lead(
+                signal_rows=int(signal_summary["signal_rows"] or 0),
+                positive_signal_rows=int(signal_summary["positive_signal_rows"] or 0),
+                unknown_signal_rows=int(signal_summary["unknown_signal_rows"] or 0),
+                hard_negative_signal_rows=int(signal_summary["hard_negative_signal_rows"] or 0),
+                delta_rows=delta_rows_int,
+                max_overall_score=signal_summary.get("max_overall_score"),
+            ),
+            "max_overall_score": signal_summary.get("max_overall_score"),
         }
         covered_no_leads.append(row)
         backlog_hints.append(row)
@@ -491,6 +620,8 @@ async def _delta_gap_snapshot(province: str) -> DeltaGapSnapshot:
                     "localities": localities or "",
                     "backlog_status": status,
                     "operator_hint": operator_hint,
+                    "why_no_lead": row["why_no_lead"],
+                    "max_overall_score": row.get("max_overall_score"),
                 }
             )
 
@@ -508,6 +639,10 @@ async def _delta_gap_snapshot(province: str) -> DeltaGapSnapshot:
                 "next_action": row.get("next_action"),
                 "in_registry": row["in_registry"],
                 "covered_via": coverage_alias_teryt(str(row["teryt"])),
+                "why_no_lead": _classify_uncovered_why_no_lead(
+                    backlog_status=str(row["backlog_status"]),
+                    coverage_category=row.get("coverage_category"),
+                ),
             }
         )
 
@@ -637,11 +772,15 @@ async def _run_scoped_resolution(
         province=province,
         destructive_gold_reset=False,
     )
-    batch_size = max(100, len(reset_report.target_listing_ids), reset_report.bronze_rows_requeued)
-    geo_report = await run_geo_resolver(
-        batch_size=batch_size,
-        listing_ids=reset_report.target_listing_ids or None,
-    )
+    scoped_listing_ids = list(reset_report.target_listing_ids or [])
+    if scoped_listing_ids:
+        batch_size = max(100, len(scoped_listing_ids), reset_report.bronze_rows_requeued)
+        geo_report = await run_geo_resolver(
+            batch_size=batch_size,
+            listing_ids=scoped_listing_ids,
+        )
+    else:
+        geo_report = ResolutionReport()
 
     if autofix:
         pending_after_geo = await _pending_listing_ids(province)
@@ -720,6 +859,14 @@ def _print_report(result: ProvinceCampaignResult) -> None:
             f"deltas={result.delta_report['delta_results_created']} "
             f"leads_new={result.delta_report['leads_created']}"
         )
+    if result.future_report:
+        print(
+            f"Future: analyzed={result.future_report['dzialki_analyzed']} "
+            f"assessments_new={result.future_report['assessments_created']} "
+            f"assessments_updated={result.future_report['assessments_updated']} "
+            f"leads_new={result.future_report['leads_created']} "
+            f"leads_updated={result.future_report['leads_updated']}"
+        )
     if result.autofix_actions:
         print("Autofix:")
         for action in result.autofix_actions:
@@ -782,6 +929,7 @@ def _print_report(result: ProvinceCampaignResult) -> None:
             print(
                 f"  - {row['teryt_gmina']}: status={row['backlog_status']} "
                 f"category={row.get('coverage_category', '-')} "
+                f"why={row.get('why_no_lead', '-')} "
                 f"dzialki={row['dzialki']} localities={localities} "
                 f"covered_via={row.get('covered_via', row['teryt_gmina'])}"
             )
@@ -793,6 +941,7 @@ def _print_report(result: ProvinceCampaignResult) -> None:
             print(
                 f"  - {row['teryt_gmina']}: dzialki={row['dzialki']} "
                 f"zones={row['planning_zones']} delta_rows={row.get('delta_rows', 0)} "
+                f"why={row.get('why_no_lead', '-')} "
                 f"localities={row.get('localities', '-')} "
                 f"covered_via={row.get('covered_via', row['teryt_gmina'])}"
             )
@@ -818,7 +967,7 @@ async def _run_campaign(
         before=before,
         after=before,
         uncovered=uncovered_before,
-        delta_gap=await _delta_gap_snapshot(province_key) if province_key == "malopolskie" else None,
+        delta_gap=await _delta_gap_snapshot(province_key),
     )
 
     if stage in {"sync", "full"}:
@@ -846,36 +995,31 @@ async def _run_campaign(
         result.geo_report = asdict(geo_report)
         if delta_report is not None:
             result.delta_report = asdict(delta_report)
+            province_dzialka_ids = await _province_dzialka_ids(province_key)
+            future_report: FutureBuildabilityReport = await run_future_buildability_engine(
+                batch_size=max(100, len(province_dzialka_ids)),
+                dzialka_ids=province_dzialka_ids or None,
+            )
+            result.future_report = asdict(future_report)
 
     result.after = await _status_snapshot(province_key, parallel=parallel)
-    result.uncovered = [asdict(row) for row in await _fetch_uncovered_gminy(limit=12, province=province_key)]
-    if province_key == "malopolskie":
-        result.delta_gap = await _delta_gap_snapshot(province_key)
-        result.uncovered = list(result.delta_gap.uncovered_gminy)
-        _write_coverage_backlog_snapshot(
-            province=province_key,
-            before=result.before,
-            after=result.after,
-            delta_gap=result.delta_gap,
-        )
-    else:
-        delta_gap = await _delta_gap_snapshot(province_key)
-        _write_coverage_backlog_snapshot(
-            province=province_key,
-            before=result.before,
-            after=result.after,
-            delta_gap=delta_gap,
-        )
+    result.delta_gap = await _delta_gap_snapshot(province_key)
+    result.uncovered = list(result.delta_gap.uncovered_gminy)
+    _write_coverage_backlog_snapshot(
+        province=province_key,
+        before=result.before,
+        after=result.after,
+        delta_gap=result.delta_gap,
+    )
 
-    for status_province in ("slaskie", "malopolskie"):
-        payload = await build_future_buildability_status_payload(province=status_province)
-        _write_future_status_snapshot(province=status_province, payload=payload)
-        result.future_status_reports[status_province] = payload
+    payload = await build_future_buildability_status_payload(province=province_key)
+    _write_future_status_snapshot(province=province_key, payload=payload)
+    result.future_status_reports[province_key] = payload
     return result
 
 
 async def main() -> None:
-    args = _parse_args()
+    args = parse_args()
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s %(levelname)-7s %(name)s | %(message)s",

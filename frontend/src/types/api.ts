@@ -101,6 +101,10 @@ export interface LeadProperties {
   teryt_gmina: string;           // 7-char TERYT code
   listing_id: string | null;
   source_url: string | null;
+  kw_number: string | null;
+  ekw_search_url: string | null;
+  source_status: 'live' | 'expired' | 'unknown' | null;
+  source_expires_at: string | null;
   evidence_chain: EvidenceStep[];
   signal_breakdown: SignalBreakdownItem[];
   created_at: string;            // ISO 8601 UTC

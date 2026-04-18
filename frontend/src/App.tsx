@@ -120,6 +120,8 @@ function parseNullableNumber(value: string): number | null {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
+const FUTURE_BUILDABLE_MIN_SCORE_FLOOR = 0.3;
+
 function RangeField({
   label,
   minValue,
@@ -1035,8 +1037,12 @@ export default function App() {
   ]);
 
   useEffect(() => {
-    if (futureBuildabilityEnabled && strategyFilter === 'future_buildable' && minScore > 0.5) {
-      setMinScore(0.5);
+    if (
+      futureBuildabilityEnabled &&
+      strategyFilter === 'future_buildable' &&
+      minScore > FUTURE_BUILDABLE_MIN_SCORE_FLOOR
+    ) {
+      setMinScore(FUTURE_BUILDABLE_MIN_SCORE_FLOOR);
     }
   }, [futureBuildabilityEnabled, strategyFilter, minScore, setMinScore]);
 
@@ -1256,7 +1262,7 @@ export default function App() {
       setStrategyFilter('future_buildable');
       setConfidenceBandFilter('all');
       setCheapOnly(true);
-      setMinScore(0.5);
+      setMinScore(FUTURE_BUILDABLE_MIN_SCORE_FLOOR);
       setPriceFilter('all');
       setLeadSort('price_per_m2_asc');
       setStatusFilter('active');

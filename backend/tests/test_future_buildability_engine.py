@@ -151,6 +151,21 @@ def test_confidence_band_blocks_unknown_planning_resolution_domination() -> None
     ) is None
 
 
+def test_confidence_band_accepts_cheap_positive_planning_resolution_without_geometry() -> None:
+    assert _derive_confidence_band(
+        current_buildable_status="non_buildable",
+        overall_score=Decimal("30.00"),
+        future_signal_score=Decimal("10.00"),
+        cheapness_score=Decimal("20.00"),
+        has_formal_signal=False,
+        has_supporting_formal_signal=True,
+        has_corroborated_supporting_signal=False,
+        heuristic_hits=0,
+        hard_negative=False,
+        dominant_unknown_resolution=False,
+    ) == "supported"
+
+
 def test_supporting_signal_corroboration_rewards_three_consistent_sources() -> None:
     bonus, corroborated, breakdown = _score_supporting_signal_corroboration(
         [

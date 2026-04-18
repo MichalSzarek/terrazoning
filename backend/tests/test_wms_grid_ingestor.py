@@ -100,3 +100,23 @@ def test_parse_gison_portal_html_metadata_extracts_plan_without_designation() ->
     assert metadata["plan_name"] == "Miejscowy Plan Zagospodarowania Przestrzennego Gminy i Miasta Czerwionka - Leszczyny"
     assert metadata["uchwala_nr"] == "IX/78/2002"
     assert metadata["legend_url"] == "https://example.test/legenda.png"
+
+
+def test_parse_gison_portal_html_metadata_accepts_app_view_html() -> None:
+    body = (
+        "<html><body><h3>Wizualizacja zawartości pliku APP</h3>"
+        "<b>tytul</b><div class='span1'><div class='span0'>"
+        "w sprawie uchwalenia miejscowego planu zagospodarowania przestrzennego "
+        "Nr 1/99 terenów lasów i zalesień w gminie Hyżne"
+        "</div></div>"
+        "<b>lokalnyId</b><div class='span1'><div class='span0'>XIII.64.99_P1</div></div>"
+        "<b>legenda</b><div class='span1'><div class='span0'>https://example.test/hyzne-001.jpg</div></div>"
+        "</body></html>"
+    )
+
+    metadata = parse_gison_portal_html_metadata(body)
+
+    assert metadata is not None
+    assert "lasów i zalesień" in metadata["plan_name"]
+    assert metadata["uchwala_nr"] == "XIII.64.99_P1"
+    assert metadata["legend_url"] is None

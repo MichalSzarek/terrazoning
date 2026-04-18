@@ -18,13 +18,17 @@ def test_normalize_province_handles_ascii_and_diacritics() -> None:
     assert normalize_province("slaskie") == "slaskie"
     assert normalize_province("ŚLĄSKIE") == "slaskie"
     assert normalize_province("małopolskie") == "malopolskie"
+    assert normalize_province("Podkarpackie") == "podkarpackie"
 
 
 def test_province_labels_and_prefixes_match_expected_runtime_scope() -> None:
+    assert province_db_label("podkarpackie") == "podkarpackie"
     assert province_db_label("slaskie") == "śląskie"
     assert province_db_label("malopolskie") == "małopolskie"
+    assert province_display_name("podkarpackie") == "Podkarpackie"
     assert province_display_name("slaskie") == "Śląskie"
     assert province_display_name("malopolskie") == "Małopolskie"
+    assert province_teryt_prefix("podkarpackie") == "18"
     assert province_teryt_prefix("slaskie") == "24"
     assert province_teryt_prefix("malopolskie") == "12"
 

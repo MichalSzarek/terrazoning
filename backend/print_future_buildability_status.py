@@ -11,7 +11,7 @@ from sqlalchemy import text
 from app.core.config import settings
 from app.core.database import AsyncSessionLocal
 from app.services.future_buildability_engine import FutureBuildabilityEngine
-from app.services.operations_scope import province_display_name, province_teryt_prefix
+from app.services.operations_scope import province_display_name, province_teryt_prefix, provinces
 from app.services.planning_signal_sync import probe_html_index_registry
 
 _SIGNAL_COVERAGE_QUERY = text(
@@ -140,7 +140,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Print future-buildability rollout status")
     parser.add_argument(
         "--province",
-        choices=("slaskie", "malopolskie"),
+        choices=provinces(),
         help="Optional province scope for coverage and backlog sections",
     )
     parser.add_argument(
@@ -244,7 +244,10 @@ async def _load_backlog_rows(
     html_sources: list[Any] | None = None,
 ) -> list[dict[str, Any]]:
     if html_sources is None:
-        html_sources = await probe_html_index_registry(teryt_gmina=None)
+        html_sources = await probe_html_index_registry(
+            teryt_gmina=None,
+            province_prefix=province_prefix,
+        )
 
     threshold_rows, source_rows = await asyncio.gather(
         _fetch_rows(_NEAR_THRESHOLD_QUERY, province_prefix=province_prefix),
@@ -322,14 +325,17 @@ async def build_future_buildability_status_payload(
     skip_html_probe: bool = False,
 ) -> dict[str, Any]:
     province_prefix = province_teryt_prefix(province) if province else None
-    province_label = province_display_name(province) if province else "Śląskie + Małopolskie"
+    province_label = province_display_name(province) if province else "Wszystkie skonfigurowane województwa"
     now = datetime.now(timezone.utc)
 
     if skip_html_probe:
         html_sources = []
     else:
         try:
-            html_sources = await asyncio.wait_for(probe_html_index_registry(), timeout=20.0)
+            html_sources = await asyncio.wait_for(
+                probe_html_index_registry(province_prefix=province_prefix),
+                timeout=20.0,
+            )
         except asyncio.TimeoutError:
             html_sources = []
     # Cloud SQL has a fairly tight connection ceiling, and each helper opens

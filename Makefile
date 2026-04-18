@@ -1,10 +1,11 @@
 SHELL := /bin/zsh
 
-PROVINCES ?= slaskie malopolskie
+PROVINCES ?= slaskie malopolskie podkarpackie
 MAX_PAGES ?= 3
 TERYT ?=
 PROVINCE ?=
 BATCH_SIZE ?= 100
+LIMIT ?= 20
 BACKLOG_FORMAT ?= csv
 BACKLOG_OUTPUT ?=
 EXPECTED_STATE ?= enabled
@@ -13,6 +14,10 @@ BACKEND_HOST ?= 0.0.0.0
 BACKEND_PORT ?= 8000
 FRONTEND_HOST ?= 0.0.0.0
 FRONTEND_PORT ?= 5173
+GCP_PROXY_BACKEND_PORT ?= 8000
+GCP_PROXY_FRONTEND_PORT ?= 5173
+GCP_PROXY_ALT_BACKEND_PORT ?= 8001
+GCP_PROXY_ALT_FRONTEND_PORT ?= 5174
 APP_HOST ?= $(BACKEND_HOST)
 APP_PORT ?= $(BACKEND_PORT)
 GCP_PROJECT_ID ?= maths-489717
@@ -33,14 +38,25 @@ TERRAZONING_MAP_STYLE_URL ?=
 CLOUD_BUILD_SOURCE_STAGING_DIR ?= gs://maths-cloudbuild-source-478521031206/source
 CLOUD_BUILD_SERVICE_ACCOUNT ?= projects/maths-489717/serviceAccounts/478521031206-compute@developer.gserviceaccount.com
 GCP_JOB_ARGS ?=
+DZIALKA_ID ?=
+MANUAL_PRZEZNACZENIE ?= MN
+SOURCE_HINT ?=
 TERRAZONING_FRONTEND_API_BASE_URL ?= http://localhost:8000
+TERRAZONING_SCRAPE_LIVE_BASE_ARGS := run,--project,scraper,python,scraper/run_live.py
+TERRAZONING_GEO_RESOLVE_BASE_ARGS := run,--project,backend,python,-m,app.services.geo_resolver
+TERRAZONING_DELTA_BASE_ARGS := run,--project,backend,python,-m,app.services.delta_engine
+TERRAZONING_PLANNING_SIGNAL_SYNC_BASE_ARGS := run,--project,backend,python,backend/run_planning_signal_sync.py
+TERRAZONING_FUTURE_BUILDABILITY_BASE_ARGS := run,--project,backend,python,backend/run_future_buildability.py
+TERRAZONING_CAMPAIGN_ROLLOUT_BASE_ARGS := run,--project,backend,python,backend/run_campaign_rollout.py
 
 .PHONY: help sync-all sync-backend sync-scraper sync-frontend scrape-dry scrape-live mpzp-sync mpzp-one \
 	mpzp-uncovered mpzp-registry mpzp-ruda reparse-bronze geo-resolve delta planning-signal-sync \
-	future-buildability future-buildability-status future-buildability-backlog future-buildability-smoke force-retry load-all-data \
-	refresh-all gliwice-cluster status doctor sync-slaskie sync-malopolskie report-slaskie \
-	report-malopolskie delta-gap-malopolskie campaign-slaskie campaign-malopolskie campaign-all campaign-rollout-cloudsql \
-	run run-local run-backend run-frontend backend-dev backend-cloudsql cloudsql-health \
+	future-buildability future-buildability-status future-buildability-backlog future-buildability-smoke coverage-target-status force-retry load-all-data \
+	current-use-status current-use-backfill current-use-template \
+	quarantine-candidates quarantine-promote \
+	refresh-all gliwice-cluster status doctor sync-slaskie sync-malopolskie sync-podkarpackie report-slaskie \
+	report-malopolskie report-podkarpackie delta-gap-malopolskie campaign-slaskie campaign-malopolskie campaign-podkarpackie campaign-all campaign-rollout-cloudsql \
+	run run-local run-backend run-frontend run-gcp run-gcp-alt backend-dev backend-cloudsql cloudsql-health \
 	gcp-deploy-backend gcp-deploy-frontend gcp-service-urls gcp-smoke-api gcp-smoke-frontend \
 	gcp-auth gcp-proxy gcp-proxy-frontend gcp-proxy-api \
 	gcp-job-scrape-live gcp-job-geo-resolve gcp-job-delta gcp-job-planning-signal-sync \
@@ -49,10 +65,12 @@ TERRAZONING_FRONTEND_API_BASE_URL ?= http://localhost:8000
 help:
 	@echo "TerraZoning data operations"
 	@echo ""
-	@echo "  make run               - run Cloud SQL backend + frontend (dev) with backend health gating"
+	@echo "  make run               - run local frontend + local backend process against Cloud SQL (not Cloud Run)"
 	@echo "  make run-local         - run local PostGIS backend + frontend (dev) with backend health gating"
 	@echo "  make run-backend       - run FastAPI backend locally (BACKEND_PORT=8000)"
 	@echo "  make run-frontend      - run Vite frontend (FRONTEND_PORT=5173)"
+	@echo "  make run-gcp           - proxy deployed Cloud Run API + frontend on localhost:8000/5173 (requires same-origin /api routing)"
+	@echo "  make run-gcp-alt       - run local Vite frontend on localhost:5174 against proxied GCP API on localhost:8001"
 	@echo "  make gcp-deploy-backend - submit Cloud Build for TerraZoning backend + jobs image sync"
 	@echo "  make gcp-deploy-frontend - submit Cloud Build for TerraZoning frontend"
 	@echo "  make gcp-service-urls  - print deployed TerraZoning Cloud Run URLs"
@@ -72,7 +90,7 @@ help:
 	@echo "  make sync-backend      - install/update backend deps"
 	@echo "  make sync-scraper      - install/update scraper deps"
 	@echo "  make sync-frontend     - install/update frontend deps"
-	@echo "  make scrape-dry        - dry-run Komornik scrape (PROVINCES='slaskie malopolskie')"
+	@echo "  make scrape-dry        - dry-run Komornik scrape (PROVINCES='slaskie malopolskie podkarpackie')"
 	@echo "  make scrape-live       - live Komornik scrape (MAX_PAGES=3 by default)"
 	@echo "  make mpzp-registry     - show configured MPZP sources"
 	@echo "  make mpzp-uncovered    - show gminy without planning coverage"
@@ -80,6 +98,7 @@ help:
 	@echo "  make mpzp-one TERYT=... - sync one configured MPZP source"
 	@echo "  make sync-slaskie      - sync configured MPZP sources only for Śląskie"
 	@echo "  make sync-malopolskie  - sync configured MPZP sources only for Małopolskie"
+	@echo "  make sync-podkarpackie - sync configured MPZP sources only for Podkarpackie"
 	@echo "  make mpzp-ruda         - sync only Ruda Slaska via WMS grid ingest"
 	@echo "  make backend-dev       - run backend against local docker-compose PostGIS"
 	@echo "  make backend-cloudsql  - run backend against Cloud SQL via auth proxy"
@@ -90,7 +109,14 @@ help:
 	@echo "  make planning-signal-sync - sync normalized future-buildability planning signals"
 	@echo "  make future-buildability - run FutureBuildabilityEngine"
 	@echo "  make future-buildability-status - print rollout status, source health, and near-threshold backlog"
+	@echo "  make coverage-target-status - print province coverage progress toward a target percentage"
 	@echo "  make future-buildability-backlog - export the source-discovery backlog"
+	@echo "  make current-use-status - print current_use coverage and missing TERYT backlog"
+	@echo "  make current-use-template - export CSV template for current_use backfill"
+	@echo "  make current-use-backfill - dry-run/apply current_use CSV backfill (INPUT=..., APPLY=1)"
+	@echo "  make current-use-heuristic - dry-run/apply heuristic current_use backfill from listing text"
+	@echo "  make quarantine-candidates - rank no-lead parcels for manual operator promotion"
+	@echo "  make quarantine-promote - apply manual override to a selected or auto-picked parcel"
 	@echo "  make future-buildability-smoke - smoke-test rollout guardrails"
 	@echo "  make force-retry       - reset queues and rerun GeoResolver + DeltaEngine"
 	@echo "  make load-all-data     - MPZP sync + force retry + status summary"
@@ -98,10 +124,12 @@ help:
 	@echo "  make gliwice-cluster   - replay the Gliwice cluster helper"
 	@echo "  make report-slaskie    - province report for Śląskie"
 	@echo "  make report-malopolskie - province report for Małopolskie"
+	@echo "  make report-podkarpackie - province report for Podkarpackie"
 	@echo "  make delta-gap-malopolskie - report campaign diagnostics for Małopolskie"
 	@echo "  make campaign-slaskie  - full automated campaign for Śląskie"
 	@echo "  make campaign-malopolskie - full automated campaign for Małopolskie"
-	@echo "  make campaign-all      - run both province campaigns sequentially"
+	@echo "  make campaign-podkarpackie - full automated campaign for Podkarpackie"
+	@echo "  make campaign-all      - run all province campaigns sequentially"
 	@echo "  make campaign-rollout-cloudsql - campaigns + planning signals + future_buildability on Cloud SQL"
 	@echo "  make doctor            - light self-heal and backend status check"
 	@echo "  make status            - print core DB counts"
@@ -137,6 +165,12 @@ run:
 
 run-local:
 	BACKEND_MODE=local BACKEND_HOST=$(BACKEND_HOST) BACKEND_PORT=$(BACKEND_PORT) FRONTEND_HOST=$(FRONTEND_HOST) FRONTEND_PORT=$(FRONTEND_PORT) ./scripts/run_dev.sh
+
+run-gcp:
+	BACKEND_PORT=$(GCP_PROXY_BACKEND_PORT) FRONTEND_PORT=$(GCP_PROXY_FRONTEND_PORT) bash ./scripts/run_gcp_proxies.sh
+
+run-gcp-alt:
+	BACKEND_PORT=$(GCP_PROXY_ALT_BACKEND_PORT) FRONTEND_PORT=$(GCP_PROXY_ALT_FRONTEND_PORT) FRONTEND_HOST=$(FRONTEND_HOST) bash ./scripts/run_gcp_frontend_dev.sh
 scrape-dry:
 	./scripts/run_backend_cloudsql.sh exec scraper -- uv run python run_live.py --dry-run --provinces $(PROVINCES) --max-pages 1 --verbose
 
@@ -157,6 +191,9 @@ sync-slaskie:
 
 sync-malopolskie:
 	./scripts/run_backend_cloudsql.sh exec backend -- uv run python run_wfs_sync.py --province malopolskie
+
+sync-podkarpackie:
+	./scripts/run_backend_cloudsql.sh exec backend -- uv run python run_wfs_sync.py --province podkarpackie
 
 mpzp-one:
 	@if [ -z "$(TERYT)" ]; then \
@@ -189,11 +226,70 @@ future-buildability:
 future-buildability-status:
 	./scripts/run_backend_cloudsql.sh exec backend -- uv run python print_future_buildability_status.py $(if $(PROVINCE),--province $(PROVINCE),)
 
+coverage-target-status:
+	./scripts/run_backend_cloudsql.sh exec backend -- uv run python print_coverage_target_status.py \
+		$(foreach province,$(PROVINCES),--province $(province)) \
+		$(if $(TARGET_PCT),--target-pct $(TARGET_PCT),) \
+		$(if $(LIMIT),--limit $(LIMIT),) \
+		$(if $(JSON),--json,)
+
 future-buildability-backlog:
 	./scripts/run_backend_cloudsql.sh exec backend -- uv run python export_future_buildability_backlog.py \
 		$(if $(PROVINCE),--province $(PROVINCE),) \
 		--format $(BACKLOG_FORMAT) \
 		$(if $(BACKLOG_OUTPUT),--output $(BACKLOG_OUTPUT),)
+
+province-backlog-snapshot:
+	./scripts/run_backend_cloudsql.sh exec backend -- uv run python export_province_backlog_snapshot.py \
+		--province $(PROVINCE) \
+		--format $(BACKLOG_FORMAT) \
+		$(if $(BACKLOG_OUTPUT),--output $(BACKLOG_OUTPUT),) \
+		--parallel
+
+formal-coverage-backfill:
+	./scripts/run_backend_cloudsql.sh exec backend -- uv run python backfill_formal_coverage.py \
+		$(foreach t,$(TERYTS),--teryt $(t))
+
+current-use-status:
+	./scripts/run_backend_cloudsql.sh exec backend -- uv run python print_current_use_status.py \
+		$(if $(PROVINCE),--province $(PROVINCE),)
+
+current-use-template:
+	./scripts/run_backend_cloudsql.sh exec backend -- uv run python backfill_current_use.py \
+		$(if $(PROVINCE),--province $(PROVINCE),) \
+		--export-template $(or $(OUTPUT),runtime/current_use_template.csv) \
+		$(if $(LIMIT),--limit $(LIMIT),)
+
+current-use-backfill:
+	./scripts/run_backend_cloudsql.sh exec backend -- uv run python backfill_current_use.py \
+		$(if $(PROVINCE),--province $(PROVINCE),) \
+		$(if $(INPUT),--input $(INPUT),) \
+		$(if $(APPLY),--apply,) \
+		$(if $(OVERWRITE),--overwrite,)
+
+current-use-heuristic:
+	./scripts/run_backend_cloudsql.sh exec backend -- uv run python backfill_current_use.py \
+		$(if $(PROVINCE),--province $(PROVINCE),) \
+		--infer-from-listings \
+		$(if $(APPLY),--apply,) \
+		$(if $(OVERWRITE),--overwrite,)
+
+quarantine-candidates:
+	./scripts/run_backend_cloudsql.sh exec backend -- uv run python promote_quarantine_parcel.py \
+		$(if $(PROVINCE),--province $(PROVINCE),) \
+		$(if $(TERYT),--teryt $(TERYT),) \
+		--limit $(LIMIT) \
+		$(if $(SOURCE_HINT),--source-url-contains $(SOURCE_HINT),)
+
+quarantine-promote:
+	./scripts/run_backend_cloudsql.sh exec backend -- uv run python promote_quarantine_parcel.py \
+		$(if $(PROVINCE),--province $(PROVINCE),) \
+		$(if $(TERYT),--teryt $(TERYT),) \
+		$(if $(DZIALKA_ID),--dzialka-id $(DZIALKA_ID),--auto-pick) \
+		$(if $(SOURCE_HINT),--source-url-contains $(SOURCE_HINT),) \
+		--manual-przeznaczenie $(MANUAL_PRZEZNACZENIE) \
+		--apply \
+		--json
 
 future-buildability-smoke:
 	./scripts/run_backend_cloudsql.sh exec backend -- uv run python smoke_future_buildability_rollout.py \
@@ -212,6 +308,9 @@ report-slaskie:
 report-malopolskie:
 	./scripts/run_backend_cloudsql.sh exec backend -- uv run python run_province_campaign.py --province malopolskie --stage report --parallel
 
+report-podkarpackie:
+	./scripts/run_backend_cloudsql.sh exec backend -- uv run python run_province_campaign.py --province podkarpackie --stage report --parallel
+
 delta-gap-malopolskie:
 	./scripts/run_backend_cloudsql.sh exec backend -- uv run python run_province_campaign.py --province malopolskie --stage report --parallel
 
@@ -221,18 +320,25 @@ campaign-slaskie:
 campaign-malopolskie:
 	./scripts/run_backend_cloudsql.sh exec backend -- uv run python run_province_campaign.py --province malopolskie --stage full --autofix --parallel
 
+campaign-podkarpackie:
+	./scripts/run_backend_cloudsql.sh exec backend -- uv run python run_province_campaign.py --province podkarpackie --stage full --autofix --parallel
+
 campaign-all:
 	$(MAKE) campaign-slaskie
 	$(MAKE) campaign-malopolskie
+	$(MAKE) campaign-podkarpackie
 
 campaign-rollout-cloudsql:
 	$(MAKE) campaign-slaskie
 	$(MAKE) campaign-malopolskie
+	$(MAKE) campaign-podkarpackie
 	$(MAKE) planning-signal-sync
 	$(MAKE) future-buildability PROVINCE=slaskie
 	$(MAKE) future-buildability PROVINCE=malopolskie
+	$(MAKE) future-buildability PROVINCE=podkarpackie
 	$(MAKE) future-buildability-status PROVINCE=slaskie
 	$(MAKE) future-buildability-status PROVINCE=malopolskie
+	$(MAKE) future-buildability-status PROVINCE=podkarpackie
 	$(MAKE) status
 
 doctor:
@@ -298,22 +404,43 @@ gcp-proxy-api:
 	gcloud run services proxy $(TERRAZONING_API_SERVICE) --project $(GCP_PROJECT_ID) --region $(GCP_REGION) --port $(BACKEND_PORT)
 
 gcp-job-scrape-live:
-	gcloud run jobs execute $(TERRAZONING_JOB_SCRAPE_LIVE) --project $(GCP_PROJECT_ID) --region $(GCP_REGION) --wait
+	@args=""; \
+	if [ -n "$(GCP_JOB_ARGS)" ]; then \
+		args="--args=$(TERRAZONING_SCRAPE_LIVE_BASE_ARGS),$(GCP_JOB_ARGS)"; \
+	fi; \
+	gcloud run jobs execute $(TERRAZONING_JOB_SCRAPE_LIVE) --project $(GCP_PROJECT_ID) --region $(GCP_REGION) --wait $$args
 
 gcp-job-geo-resolve:
-	gcloud run jobs execute $(TERRAZONING_JOB_GEO_RESOLVE) --project $(GCP_PROJECT_ID) --region $(GCP_REGION) --wait
+	@args=""; \
+	if [ -n "$(GCP_JOB_ARGS)" ]; then \
+		args="--args=$(TERRAZONING_GEO_RESOLVE_BASE_ARGS),$(GCP_JOB_ARGS)"; \
+	fi; \
+	gcloud run jobs execute $(TERRAZONING_JOB_GEO_RESOLVE) --project $(GCP_PROJECT_ID) --region $(GCP_REGION) --wait $$args
 
 gcp-job-delta:
-	gcloud run jobs execute $(TERRAZONING_JOB_DELTA) --project $(GCP_PROJECT_ID) --region $(GCP_REGION) --wait
+	@args=""; \
+	if [ -n "$(GCP_JOB_ARGS)" ]; then \
+		args="--args=$(TERRAZONING_DELTA_BASE_ARGS),$(GCP_JOB_ARGS)"; \
+	fi; \
+	gcloud run jobs execute $(TERRAZONING_JOB_DELTA) --project $(GCP_PROJECT_ID) --region $(GCP_REGION) --wait $$args
 
 gcp-job-planning-signal-sync:
-	gcloud run jobs execute $(TERRAZONING_JOB_PLANNING_SIGNAL_SYNC) --project $(GCP_PROJECT_ID) --region $(GCP_REGION) --wait \
-		$(if $(GCP_JOB_ARGS),--args "$(GCP_JOB_ARGS)",)
+	@args=""; \
+	if [ -n "$(GCP_JOB_ARGS)" ]; then \
+		args="--args=$(TERRAZONING_PLANNING_SIGNAL_SYNC_BASE_ARGS),$(GCP_JOB_ARGS)"; \
+	fi; \
+	gcloud run jobs execute $(TERRAZONING_JOB_PLANNING_SIGNAL_SYNC) --project $(GCP_PROJECT_ID) --region $(GCP_REGION) --wait $$args
 
 gcp-job-future-buildability:
-	gcloud run jobs execute $(TERRAZONING_JOB_FUTURE_BUILDABILITY) --project $(GCP_PROJECT_ID) --region $(GCP_REGION) --wait \
-		$(if $(GCP_JOB_ARGS),--args "$(GCP_JOB_ARGS)",)
+	@args=""; \
+	if [ -n "$(GCP_JOB_ARGS)" ]; then \
+		args="--args=$(TERRAZONING_FUTURE_BUILDABILITY_BASE_ARGS),$(GCP_JOB_ARGS)"; \
+	fi; \
+	gcloud run jobs execute $(TERRAZONING_JOB_FUTURE_BUILDABILITY) --project $(GCP_PROJECT_ID) --region $(GCP_REGION) --wait $$args
 
 gcp-job-campaign-rollout:
-	gcloud run jobs execute $(TERRAZONING_JOB_CAMPAIGN_ROLLOUT) --project $(GCP_PROJECT_ID) --region $(GCP_REGION) --wait \
-		$(if $(GCP_JOB_ARGS),--args "$(GCP_JOB_ARGS)",)
+	@args=""; \
+	if [ -n "$(GCP_JOB_ARGS)" ]; then \
+		args="--args=$(TERRAZONING_CAMPAIGN_ROLLOUT_BASE_ARGS),$(GCP_JOB_ARGS)"; \
+	fi; \
+	gcloud run jobs execute $(TERRAZONING_JOB_CAMPAIGN_ROLLOUT) --project $(GCP_PROJECT_ID) --region $(GCP_REGION) --wait $$args

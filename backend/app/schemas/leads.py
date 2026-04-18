@@ -226,6 +226,28 @@ class LeadProperties(BaseModel):
             "https://licytacje.komornik.pl/wyszukiwarka/obwieszczenia-o-licytacji/32027/licytacja-nieruchomosci-prawo-wlasnosci-nieruchomosci-gruntowej",
         ],
     )
+    kw_number: Optional[str] = Field(
+        default=None,
+        description="Canonical KW number from bronze.raw_listings.raw_kw, e.g. KR1B/00079684/3",
+        examples=["KR1B/00079684/3"],
+    )
+    ekw_search_url: Optional[str] = Field(
+        default=None,
+        description="Best-effort external link to the official EKW search page with prefilled parameters",
+        examples=[
+            "https://przegladarka-ekw.ms.gov.pl/eukw_prz/KsiegiWieczyste/wyszukiwanieKW?komunikaty=true&kontakt=true&okienkoSerwisowe=false&kodEci=KR1B&kodWydzialuInput=KR1B&numerKW=00079684&cyfraKontrolna=3",
+        ],
+    )
+    source_status: Optional[str] = Field(
+        default=None,
+        description="'live' | 'expired' | 'unknown' source availability hint for the canonical listing URL",
+        examples=["expired"],
+    )
+    source_expires_at: Optional[str] = Field(
+        default=None,
+        description="Auction or source expiry date in ISO format when available",
+        examples=["2026-04-14"],
+    )
 
     # Full evidence chain — every hop from source to delta
     evidence_chain: list[Any] = Field(

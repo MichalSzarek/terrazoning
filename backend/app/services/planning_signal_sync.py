@@ -381,6 +381,280 @@ _HTML_INDEX_SIGNAL_REGISTRY: tuple[HtmlIndexSignalSource, ...] = (
         label="Nowy Wiśnicz Rejestr urbanistyczny",
     ),
     HtmlIndexSignalSource(
+        teryt_gmina="1202024",
+        source_url="https://www.brzesko.pl/wpis/87444%2Copracowanie-planu-ogolnego-zagospodarowania-przestrzennego-dla-gminy-brzesko",
+        label="Brzesko Opracowanie planu ogólnego",
+        source_confidence=Decimal("0.88"),
+    ),
+    HtmlIndexSignalSource(
+        teryt_gmina="1202024",
+        source_url="https://brzesko.geoportal-krajowy.pl/mpzp",
+        label="Brzesko Geoportal MPZP",
+        source_confidence=Decimal("0.90"),
+    ),
+    HtmlIndexSignalSource(
+        teryt_gmina="1202024",
+        source_url="https://www.brzesko.pl/artykul/222%2Cplanowanie-przestrzenne",
+        label="Brzesko Planowanie przestrzenne",
+        source_confidence=Decimal("0.90"),
+    ),
+    HtmlIndexSignalSource(
+        teryt_gmina="1805042",
+        source_url="https://jaslo.e-mapa.net/wykazplanow/",
+        label="Gmina Jasło Rejestr urbanistyczny",
+    ),
+    HtmlIndexSignalSource(
+        teryt_gmina="1805042",
+        source_url="https://rejestrplanowogolnych.pl/?teryt=180504_2",
+        label="Gmina Jasło Rejestr planu ogólnego",
+        source_confidence=Decimal("0.88"),
+    ),
+    HtmlIndexSignalSource(
+        teryt_gmina="1805042",
+        source_url="https://rastry.gison.pl/mpzp-public/jaslogmina/uchwaly/U_2018_433_LXVIII_studium.pdf",
+        label="Gmina Jasło Studium tekst PDF",
+        source_confidence=Decimal("0.90"),
+    ),
+    HtmlIndexSignalSource(
+        teryt_gmina="1808042",
+        source_url="https://uglezajsk.bip.gov.pl/mpzp-giedlarowa/o-b-w-i-e-s-z-c-z-e-n-i-e-wojta-gminy-lezajsk-z-dnia-27-02-2024-o-przystapieniu-do-sporzadzania-miejscowego-planu-zagospodarowania-przestrzennego-terenu-wsi-giedlarowa.html",
+        label="Giedlarowa Obwieszczenie o przystąpieniu do MPZP",
+        source_confidence=Decimal("0.92"),
+    ),
+    HtmlIndexSignalSource(
+        teryt_gmina="1808042",
+        source_url="https://uglezajsk.bip.gov.pl/planowanie-przestrzenne/zbiory-danych-przestrzennych/zbior-app-dla-mpz/zbior-danych-mpzp-makemaker.html",
+        label="Gmina Leżajsk APP MPZP",
+        source_confidence=Decimal("0.90"),
+    ),
+    HtmlIndexSignalSource(
+        teryt_gmina="1808042",
+        source_url="https://uglezajsk.bip.gov.pl/planowanie-przestrzenne/zbiory-danych-przestrzennych/zbior-app-dla-studium/zbior-danych-app-dla-studium-makemaker.html",
+        label="Gmina Leżajsk APP Studium",
+        source_confidence=Decimal("0.88"),
+    ),
+    HtmlIndexSignalSource(
+        teryt_gmina="1816035",
+        source_url="https://bip.boguchwala.pl/pl/404-menu-tematyczne/12304-planowanie-przestrzenne.html",
+        label="Boguchwała Planowanie przestrzenne - BIP",
+        source_confidence=Decimal("0.90"),
+    ),
+    HtmlIndexSignalSource(
+        teryt_gmina="1816035",
+        source_url="https://boguchwala.geoportal-krajowy.pl/plan-ogolny",
+        label="Boguchwała Geoportal plan ogólny",
+        source_confidence=Decimal("0.86"),
+    ),
+    HtmlIndexSignalSource(
+        teryt_gmina="1816035",
+        source_url="https://rastry.gison.pl/mpzp-public/boguchwala/uchwaly/U_2020_354_XXIX_studium_tekst.pdf",
+        label="Boguchwała Studium tekst PDF",
+        source_confidence=Decimal("0.90"),
+    ),
+    HtmlIndexSignalSource(
+        teryt_gmina="1816035",
+        source_url="https://rastry.gison.pl/mpzp-public/boguchwala/uchwaly/U_2019_218_XV.pdf",
+        label="Boguchwała MPZP tekst PDF",
+        source_confidence=Decimal("0.90"),
+    ),
+    HtmlIndexSignalSource(
+        teryt_gmina="1804082",
+        source_url="https://www.ugradymno.pl/asp/plan-ogolny-informacje%2C1%2Cartykul%2C1%2C1625",
+        label="Gmina Radymno Plan ogólny - informacje",
+        source_confidence=Decimal("0.88"),
+    ),
+    HtmlIndexSignalSource(
+        teryt_gmina="1805112",
+        source_url="https://www.ugradymno.pl/asp/core/pdf.asp?akcja=artykul&artykul=1551&menu=1",
+        label="Gmina Radymno Plan ogólny - PDF artykułu",
+        source_confidence=Decimal("0.88"),
+    ),
+    HtmlIndexSignalSource(
+        teryt_gmina="1804082",
+        source_url="https://radymno.geoportal-krajowy.pl/plan-ogolny",
+        label="Gmina Radymno Geoportal plan ogólny",
+        source_confidence=Decimal("0.88"),
+    ),
+    HtmlIndexSignalSource(
+        teryt_gmina="1804082",
+        source_url="https://radymno.geoportal-krajowy.pl/mpzp",
+        label="Gmina Radymno Geoportal MPZP",
+        source_confidence=Decimal("0.88"),
+    ),
+    HtmlIndexSignalSource(
+        teryt_gmina="1805112",
+        source_url="https://bip.tarnowiec.eu/planowanie-przestrzenne/238",
+        label="Tarnowiec Planowanie przestrzenne - BIP",
+        source_confidence=Decimal("0.90"),
+    ),
+    HtmlIndexSignalSource(
+        teryt_gmina="1805112",
+        source_url="https://bip.tarnowiec.eu/projekty-mpzp/290",
+        label="Tarnowiec Projekty MPZP - BIP",
+        source_confidence=Decimal("0.92"),
+    ),
+    HtmlIndexSignalSource(
+        teryt_gmina="1805112",
+        source_url="https://tarnowiec.eu/aktualnosc-4123-przystapienie_do_sporzadzenia_planu.html",
+        label="Tarnowiec Przystąpienie do sporządzenia planu ogólnego",
+        source_confidence=Decimal("0.90"),
+    ),
+    HtmlIndexSignalSource(
+        teryt_gmina="1803042",
+        source_url="https://gminadebica.e-mapa.net/wykazplanow/",
+        label="Gmina Dębica Rejestr urbanistyczny",
+        source_confidence=Decimal("0.90"),
+    ),
+    HtmlIndexSignalSource(
+        teryt_gmina="1803052",
+        source_url="https://jodlowa.e-mapa.net/wykazplanow/",
+        label="Jodłowa Rejestr urbanistyczny",
+        source_confidence=Decimal("0.90"),
+    ),
+    HtmlIndexSignalSource(
+        teryt_gmina="1807025",
+        source_url="https://dukla.e-mapa.net/wykazplanow/",
+        label="Dukla Rejestr urbanistyczny",
+    ),
+    HtmlIndexSignalSource(
+        teryt_gmina="1807025",
+        source_url="https://dukla.geoportal-krajowy.pl/plan-ogolny",
+        label="Dukla Geoportal plan ogólny",
+        source_confidence=Decimal("0.88"),
+    ),
+    HtmlIndexSignalSource(
+        teryt_gmina="1807025",
+        source_url="https://www.dukla.pl/pl/dla-mieszkancow/mapy-i-plany-79/wnioski-do-planu-ogolnego-226",
+        label="Dukla Wnioski do planu ogólnego",
+        source_confidence=Decimal("0.90"),
+    ),
+    HtmlIndexSignalSource(
+        teryt_gmina="1807025",
+        source_url="https://www.dukla.pl/files/_source/2025/01/ogloszenie%20na%20BIP%20i%20na%20strone%20gminy.pdf",
+        label="Dukla Ogłoszenie planu ogólnego PDF",
+        source_confidence=Decimal("0.90"),
+    ),
+    HtmlIndexSignalSource(
+        teryt_gmina="1809054",
+        source_url="https://narol.geoportal-krajowy.pl/plan-ogolny",
+        label="Narol Geoportal plan ogólny",
+        source_confidence=Decimal("0.88"),
+    ),
+    HtmlIndexSignalSource(
+        teryt_gmina="1809054",
+        source_url="https://narol.geoportal-krajowy.pl/mpzp",
+        label="Narol Geoportal MPZP",
+        source_confidence=Decimal("0.92"),
+    ),
+    HtmlIndexSignalSource(
+        teryt_gmina="1803042",
+        source_url="https://debica.geoportal-krajowy.pl/",
+        label="Dębica Geoportal landing page",
+        source_confidence=Decimal("0.82"),
+    ),
+    HtmlIndexSignalSource(
+        teryt_gmina="1803042",
+        source_url="https://debica.geoportal-krajowy.pl/mpzp",
+        label="Dębica Geoportal MPZP registry",
+        source_confidence=Decimal("0.92"),
+    ),
+    HtmlIndexSignalSource(
+        teryt_gmina="1803052",
+        source_url="https://jodlowa.geoportal-krajowy.pl/",
+        label="Jodłowa Geoportal landing page",
+        source_confidence=Decimal("0.82"),
+    ),
+    HtmlIndexSignalSource(
+        teryt_gmina="1803052",
+        source_url="https://jodlowa.geoportal-krajowy.pl/plan-ogolny",
+        label="Jodłowa Geoportal plan ogólny",
+        source_confidence=Decimal("0.88"),
+    ),
+    HtmlIndexSignalSource(
+        teryt_gmina="1803065",
+        source_url="https://pilzno.geoportal-krajowy.pl/",
+        label="Pilzno Geoportal landing page",
+        source_confidence=Decimal("0.82"),
+    ),
+    HtmlIndexSignalSource(
+        teryt_gmina="1803065",
+        source_url="https://pilzno.geoportal-krajowy.pl/plan-ogolny",
+        label="Pilzno Geoportal plan ogólny",
+        source_confidence=Decimal("0.88"),
+    ),
+    HtmlIndexSignalSource(
+        teryt_gmina="1803065",
+        source_url="https://pilzno.geoportal-krajowy.pl/mpzp",
+        label="Pilzno Geoportal MPZP registry",
+        source_confidence=Decimal("0.92"),
+    ),
+    HtmlIndexSignalSource(
+        teryt_gmina="1811032",
+        source_url="https://czermin-mielecki.geoportal-krajowy.pl/",
+        label="Czermin Geoportal landing page",
+        source_confidence=Decimal("0.82"),
+    ),
+    HtmlIndexSignalSource(
+        teryt_gmina="1811032",
+        source_url="https://czermin-mielecki.geoportal-krajowy.pl/plan-ogolny",
+        label="Czermin Geoportal plan ogólny",
+        source_confidence=Decimal("0.88"),
+    ),
+    HtmlIndexSignalSource(
+        teryt_gmina="1816065",
+        source_url="https://glogow-malopolski.geoportal-krajowy.pl/",
+        label="Głogów Małopolski Geoportal landing page",
+        source_confidence=Decimal("0.82"),
+    ),
+    HtmlIndexSignalSource(
+        teryt_gmina="1816065",
+        source_url="https://glogow-malopolski.geoportal-krajowy.pl/mpzp",
+        label="Głogów Małopolski Geoportal MPZP registry",
+        source_confidence=Decimal("0.92"),
+    ),
+    HtmlIndexSignalSource(
+        teryt_gmina="1815012",
+        source_url="https://iwierzyce.e-mapa.net/wykazplanow/",
+        label="Iwierzyce Rejestr urbanistyczny",
+        source_confidence=Decimal("0.90"),
+    ),
+    HtmlIndexSignalSource(
+        teryt_gmina="1819032",
+        source_url="https://niebylec.geoportal-krajowy.pl/",
+        label="Niebylec Geoportal landing page",
+        source_confidence=Decimal("0.82"),
+    ),
+    HtmlIndexSignalSource(
+        teryt_gmina="1819032",
+        source_url="https://niebylec.geoportal-krajowy.pl/plan-ogolny",
+        label="Niebylec Geoportal plan ogólny",
+        source_confidence=Decimal("0.88"),
+    ),
+    HtmlIndexSignalSource(
+        teryt_gmina="1819045",
+        source_url="https://strzyzow.geoportal-krajowy.pl/",
+        label="Strzyżów Geoportal landing page",
+        source_confidence=Decimal("0.82"),
+    ),
+    HtmlIndexSignalSource(
+        teryt_gmina="1819045",
+        source_url="https://strzyzow.geoportal-krajowy.pl/mpzp",
+        label="Strzyżów Geoportal MPZP registry",
+        source_confidence=Decimal("0.92"),
+    ),
+    HtmlIndexSignalSource(
+        teryt_gmina="1820032",
+        source_url="https://grebow.geoportal-krajowy.pl/",
+        label="Grębów Geoportal landing page",
+        source_confidence=Decimal("0.82"),
+    ),
+    HtmlIndexSignalSource(
+        teryt_gmina="1820032",
+        source_url="https://grebow.geoportal-krajowy.pl/mpzp",
+        label="Grębów Geoportal MPZP registry",
+        source_confidence=Decimal("0.92"),
+    ),
+    HtmlIndexSignalSource(
         teryt_gmina="1201065",
         source_url="https://nowywisnicz.pl/aktualnosci/planowanie-przestrzenne/",
         label="Nowy Wiśnicz Planowanie przestrzenne",
@@ -619,6 +893,24 @@ _HTML_INDEX_SIGNAL_REGISTRY: tuple[HtmlIndexSignalSource, ...] = (
         source_url="https://e-mapa.net/plan_ogolny/120804-ksiaz-wielki",
         label="Książ Wielki e-mapa plan ogólny",
         source_confidence=Decimal("0.88"),
+    ),
+    HtmlIndexSignalSource(
+        teryt_gmina="1211092",
+        source_url="https://www.ugnowytarg.pl/strefy/planowanie-przestrzenne-i-budownictwo/plan-ogolny-gminy-nowy-targ",
+        label="Gmina Nowy Targ Plan ogólny gminy",
+        source_confidence=Decimal("0.88"),
+    ),
+    HtmlIndexSignalSource(
+        teryt_gmina="1211092",
+        source_url="https://nowy-targ.geoportal-krajowy.pl/mpzp",
+        label="Gmina Nowy Targ Geoportal MPZP",
+        source_confidence=Decimal("0.90"),
+    ),
+    HtmlIndexSignalSource(
+        teryt_gmina="1211092",
+        source_url="https://www.ugnowytarg.pl/assets/nowyTarg/media/files/c631ccc3-2fff-4b45-9bce-5bb9f6273fcd/zal-nr-1-tekst-zmiany-studium.pdf",
+        label="Gmina Nowy Targ Studium tekst PDF",
+        source_confidence=Decimal("0.90"),
     ),
     HtmlIndexSignalSource(
         teryt_gmina="1201065",
@@ -1129,10 +1421,13 @@ async def probe_html_index_source(
 async def probe_html_index_registry(
     *,
     teryt_gmina: Optional[str] = None,
+    province_prefix: Optional[str] = None,
 ) -> list[HtmlIndexSourceProbeResult]:
     results: list[HtmlIndexSourceProbeResult] = []
     for source in _HTML_INDEX_SIGNAL_REGISTRY:
         if teryt_gmina and source.teryt_gmina != teryt_gmina:
+            continue
+        if province_prefix and not source.teryt_gmina.startswith(province_prefix):
             continue
         results.append(await probe_html_index_source(source))
     return results
@@ -1232,6 +1527,48 @@ def _parse_generic_planning_page_signal(
     if not cleaned_page:
         return None
     lowered = cleaned_page.lower()
+    raw_page = html.unescape(page or "")
+
+    if "mpzpregistry" in raw_page.lower():
+        total_match = re.search(r'totalAmount"\s*:\s*\[0,(\d+)\]', raw_page, flags=re.IGNORECASE)
+        title_matches = re.findall(r'name"\s*:\s*\[0,"([^"]+)"\]', raw_page, flags=re.IGNORECASE)
+        total_amount = int(total_match.group(1)) if total_match else len(title_matches)
+        if total_amount > 0 or title_matches:
+            titles = [title.strip() for title in title_matches[:3] if title.strip()]
+            summary = "; ".join(titles) if titles else "Rejestr obowiązujących MPZP"
+            snippet = f"Geoportal registry lists {total_amount} obowiązujących MPZP: {summary}"[:240]
+            designation_normalized = normalize_designation_class("MPZP", snippet)
+            return PlanningSignal(
+                teryt_gmina=source.teryt_gmina,
+                signal_kind="planning_resolution",
+                signal_status="formal_binding",
+                designation_raw="MPZP",
+                designation_normalized=designation_normalized,
+                description=snippet,
+                plan_name=f"MPZP registry {source.teryt_gmina}",
+                uchwala_nr=None,
+                effective_date=None,
+                source_url=source.source_url,
+                source_type=source_type,
+                source_confidence=source.source_confidence,
+                legal_weight=score_signal(
+                    signal_kind="planning_resolution",
+                    designation_normalized=designation_normalized,
+                    signal_status="formal_binding",
+                ),
+                geom=None,
+                evidence_chain=[
+                    {
+                        "step": "html_index",
+                        "ref": source.source_url,
+                        "designation_raw": "MPZP",
+                        "title": snippet,
+                        "label": source.label,
+                        "registry_count": total_amount,
+                    }
+                ],
+                updated_at=datetime.now(timezone.utc),
+            )
 
     direct_match: tuple[str, str, str] | None = None
     if (

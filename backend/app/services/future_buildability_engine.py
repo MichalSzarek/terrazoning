@@ -362,6 +362,7 @@ class FutureBuildabilityEngine:
             current_buildable_status=current_buildable_status,
             overall_score=overall_score,
             future_signal_score=future_signal_score,
+            cheapness_score=cheapness_score,
             has_formal_signal=has_formal_signal,
             has_supporting_formal_signal=has_supporting_formal_signal,
             has_corroborated_supporting_signal=has_corroborated_supporting_signal,
@@ -912,6 +913,7 @@ def _derive_confidence_band(
     current_buildable_status: str,
     overall_score: Decimal,
     future_signal_score: Decimal,
+    cheapness_score: Decimal = Decimal("0.00"),
     has_formal_signal: bool,
     has_supporting_formal_signal: bool,
     has_corroborated_supporting_signal: bool,
@@ -953,6 +955,19 @@ def _derive_confidence_band(
         # Geometry-backed directional signals can still be investor-useful just
         # below the formal cut-off when several independent spatial heuristics
         # point in the same direction.
+        return "supported"
+    if (
+        overall_score >= Decimal("30.00")
+        and cheapness_score >= Decimal("20.00")
+        and future_signal_score >= Decimal("10.00")
+        and has_supporting_formal_signal
+        and not hard_negative
+    ):
+        # Conservative signal-only fallback: a positive formal planning
+        # resolution plus a clearly cheap entry price is enough to surface a
+        # low-confidence investor lead even before geometry-backed coverage is
+        # available. This keeps the lead in the automatic pipeline without
+        # pretending that we already have parcel-safe zoning polygons.
         return "supported"
     return None
 

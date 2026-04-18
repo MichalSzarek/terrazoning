@@ -34,6 +34,7 @@ from app.services.operations_scope import (
     classify_dlq_error,
     normalize_province,
     province_display_name,
+    provinces,
     sql_listing_province_filter,
     sql_teryt_prefix_filter,
 )
@@ -325,7 +326,7 @@ async def reset_queues(
 
 def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Reset DLQ/replay queues for TerraZoning")
-    parser.add_argument("--province", choices=["slaskie", "malopolskie"], default=None)
+    parser.add_argument("--province", choices=provinces(), default=None)
     parser.add_argument(
         "--listing-id",
         action="append",
