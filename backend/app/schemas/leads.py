@@ -233,9 +233,9 @@ class LeadProperties(BaseModel):
     )
     ekw_search_url: Optional[str] = Field(
         default=None,
-        description="Best-effort external link to the official EKW search page with prefilled parameters",
+        description="Official EKW search entry page opened when a canonical KW number is available",
         examples=[
-            "https://przegladarka-ekw.ms.gov.pl/eukw_prz/KsiegiWieczyste/wyszukiwanieKW?komunikaty=true&kontakt=true&okienkoSerwisowe=false&kodEci=KR1B&kodWydzialuInput=KR1B&numerKW=00079684&cyfraKontrolna=3",
+            "https://ekw.ms.gov.pl/eukw_ogol/KsiegiWieczyste",
         ],
     )
     source_status: Optional[str] = Field(
